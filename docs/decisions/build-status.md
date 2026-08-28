@@ -1,29 +1,36 @@
 # Build Status
 
 ## Current phase
-Phase 0 — Greenfield isolation and architecture baseline
+Phase 1 — Security, tenancy, and platform foundation (in progress)
 
-## Completed in this slice
-- Repository target confirmed: `jeromebusinessplatform-lab/PrimeStorefrontFinal`, branch `main`.
-- Greenfield provenance record added.
-- Cloudflare-only architecture skeleton added.
-- pnpm workspace and TypeScript baseline added.
-- Environment template added with placeholders only.
-- Application/package directory boundaries established by workspace configuration and repository structure.
+## Completed
+- Greenfield provenance and Cloudflare-only architecture baseline.
+- Root workspace configuration and separate Storefront/Admin/Core Service boundaries.
+- Environment placeholder template with no secret values.
+- D1 Phase 1 migration covering tenants, Telegram bots, customers/PRIME IDs, profile history, operators, sessions, and append-only audit event storage.
+- Tenant context guard and explicit cross-tenant mismatch rejection primitive.
+- Telegram Mini App initData HMAC verifier using Web Crypto; raw Telegram User ID digits are extracted before JSON parsing to avoid JavaScript number precision loss.
+- Audit event SHA-256 hash primitive for tamper-evident chaining.
+
+## Repository checkpoints
+- `ece8f86` — Greenfield directive commit.
+- `98f202a` — greenfield Cloudflare monorepo foundation.
+- `a4af8be` — Phase 1 security and tenancy foundation.
 
 ## Validation
-- Repository/file write path: available and exercised through GitHub API.
-- Build/test execution: pending a repository execution environment with Node/pnpm installed.
-- Greenfield isolation: source contract preserved; no existing application source was used.
+- Repository write path: verified; direct Git object/tree/commit/ref update succeeded.
+- Automated TypeScript/test/build execution: NOT YET RUN inside a connected repository execution environment.
+- Production Cloudflare mutations: intentionally not performed.
+- Existing application source import/remix: none.
 
 ## Gate status
-Phase 0 gate: NOT PASSED. The directive requires an actual install and baseline build. This slice provides the configuration needed for that gate but does not claim a pass without executable validation.
+Phase 0 gate: NOT PASSED until a real install + baseline build/test run is executed.
+Phase 1 gate: IN PROGRESS; auth/session/RBAC/audit tests and complete operator/admin security flow remain.
 
-## Next slice
-Phase 1 — Security, tenancy, and platform foundation:
-- Cloudflare bindings/contracts.
-- D1 migration baseline.
-- Tenant context and authorization boundaries.
-- Telegram HMAC verification and session primitives.
-- Append-only audit/hash-chain primitives.
-- Focused security and cross-tenant tests.
+## Next vertical slice
+Complete Phase 1 security controls:
+1. Session cookie/CSRF/revocation primitives.
+2. Telegram webhook secret verification + update deduplication contract.
+3. PRIME Member ID generator and idempotent enrollment service.
+4. Admin bootstrap-code normalization/verifier contract and RBAC permission matrix.
+5. Focused security tests and request/redaction framework.
