@@ -1,0 +1,1 @@
+{"name":"@prime/telegram-enterprise-commerce","private":true,"packageManager":"pnpm@10.15.0","scripts":{"typecheck":"tsc --noEmit -p tsconfig.json","test":"vitest run","build":"pnpm -r build"},"devDependencies":{"typescript":"^5.9.2","vitest":"^3.2.4"}}
