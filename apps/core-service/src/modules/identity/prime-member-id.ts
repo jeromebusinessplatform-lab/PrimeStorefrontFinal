@@ -1,5 +1,5 @@
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-export const PRIME_MEMBER_ID_LENGTH = 10;
+export const PRIME_MEMBER_ID_LENGTH = 12;
 
 export function generatePrimeMemberId(): string {
   const result: string[] = [];

@@ -3,8 +3,6 @@
 PRAGMA foreign_keys = ON;
 
 ALTER TABLE orders ADD COLUMN workflow_state TEXT NOT NULL DEFAULT 'REVIEW';
-ALTER TABLE orders ADD COLUMN tracking_link TEXT;
-ALTER TABLE orders ADD COLUMN dispatched_at TEXT;
 ALTER TABLE orders ADD COLUMN modification_locked_at TEXT;
 ALTER TABLE orders ADD COLUMN cancellation_locked_at TEXT;
 
