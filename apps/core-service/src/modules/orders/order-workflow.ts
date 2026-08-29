@@ -44,51 +44,16 @@ export class InvalidOrderTransition extends Error {
 }
 
 const transitions: Record<OrderWorkflowState, Partial<Record<OrderAction, OrderWorkflowState>>> = {
-  REVIEW: {
-    PAYMENT_CONFIRMED: "PAYMENT_CLEARED",
-    PAYMENT_FAILED: "PAYMENT_FAILED",
-    MODIFY: "REVIEW",
-    CANCEL_ORDER: "CANCELLED",
-  },
-  PAYMENT_CLEARED: {
-    START_PACKING: "PACKING",
-    MODIFY: "PAYMENT_CLEARED",
-    CANCEL_ORDER: "CANCELLED",
-  },
-  PACKING: {
-    READY: "READY",
-    MODIFY: "PACKING",
-    CANCEL_ORDER: "CANCELLED",
-  },
-  READY: {
-    AWAITING_RIDER: "AWAITING_RIDER",
-    CANCEL_ORDER: "CANCELLED",
-  },
-  AWAITING_RIDER: {
-    DISPATCH: "DISPATCHED",
-  },
-  DISPATCHED: {
-    DELIVER: "DELIVERED",
-  },
+  REVIEW: { PAYMENT_CONFIRMED: "PAYMENT_CLEARED", PAYMENT_FAILED: "PAYMENT_FAILED", MODIFY: "REVIEW", CANCEL_ORDER: "CANCELLED" },
+  PAYMENT_CLEARED: { START_PACKING: "PACKING", MODIFY: "PAYMENT_CLEARED", CANCEL_ORDER: "CANCELLED" },
+  PACKING: { READY: "READY", MODIFY: "PACKING", CANCEL_ORDER: "CANCELLED" },
+  READY: { AWAITING_RIDER: "AWAITING_RIDER", CANCEL_ORDER: "CANCELLED" },
+  AWAITING_RIDER: { DISPATCH: "DISPATCHED" },
+  DISPATCHED: { DELIVER: "DELIVERED" },
   DELIVERED: {},
-  PAYMENT_FAILED: {
-    HOLD_ORDER: "HOLD_ORDER",
-    REQUEST_RESUBMIT: "AWAITING_RECEIPT_RESUBMISSION",
-    REJECT_ORDER: "REJECTED",
-    MODIFY: "PAYMENT_FAILED",
-    CANCEL_ORDER: "CANCELLED",
-  },
-  HOLD_ORDER: {
-    PAYMENT_CLEARED: "PAYMENT_CLEARED",
-    REJECT_ORDER: "REJECTED",
-    CANCEL_ORDER: "CANCELLED",
-  },
-  AWAITING_RECEIPT_RESUBMISSION: {
-    PAYMENT_CONFIRMED: "PAYMENT_CLEARED",
-    PAYMENT_FAILED: "PAYMENT_FAILED",
-    REJECT_ORDER: "REJECTED",
-    CANCEL_ORDER: "CANCELLED",
-  },
+  PAYMENT_FAILED: { HOLD_ORDER: "HOLD_ORDER", REQUEST_RESUBMIT: "AWAITING_RECEIPT_RESUBMISSION", REJECT_ORDER: "REJECTED", MODIFY: "PAYMENT_FAILED", CANCEL_ORDER: "CANCELLED" },
+  HOLD_ORDER: { PAYMENT_CLEARED: "PAYMENT_CLEARED", REJECT_ORDER: "REJECTED", CANCEL_ORDER: "CANCELLED" },
+  AWAITING_RECEIPT_RESUBMISSION: { PAYMENT_CONFIRMED: "PAYMENT_CLEARED", PAYMENT_FAILED: "PAYMENT_FAILED", REJECT_ORDER: "REJECTED", CANCEL_ORDER: "CANCELLED" },
   REJECTED: {},
   CANCELLED: {},
 };
@@ -102,27 +67,22 @@ export function canCustomerCancel(state: OrderWorkflowState): boolean {
 }
 
 export function transitionOrder(request: TransitionRequest): OrderWorkflowState {
-  if (request.action === "MODIFY" && !canCustomerModify(request.state)) {
-    throw new InvalidOrderTransition("customer_modification_locked");
-  }
-
-  if (request.action === "CANCEL_ORDER" && !canCustomerCancel(request.state)) {
-    throw new InvalidOrderTransition("customer_cancellation_locked");
-  }
-
+  if (request.action === "MODIFY" && !canCustomerModify(request.state)) throw new InvalidOrderTransition("customer_modification_locked");
+  if (request.action === "CANCEL_ORDER" && !canCustomerCancel(request.state)) throw new InvalidOrderTransition("customer_cancellation_locked");
   if (request.action === "DISPATCH") {
     if (request.state !== "AWAITING_RIDER") throw new InvalidOrderTransition("dispatch_requires_awaiting_rider");
     if (!request.trackingLink?.trim()) throw new InvalidOrderTransition("tracking_link_required_for_dispatch");
+    normalizeTrackingLink(request.trackingLink);
     return "DISPATCHED";
   }
-
   const next = transitions[request.state][request.action];
   if (!next) throw new InvalidOrderTransition(`invalid_transition:${request.state}:${request.action}`);
   return next;
 }
 
 export function normalizeTrackingLink(value: string): string {
-  const url = new URL(value.trim());
+  let url: URL;
+  try { url = new URL(value.trim()); } catch { throw new InvalidOrderTransition("tracking_link_invalid"); }
   if (url.protocol !== "https:") throw new InvalidOrderTransition("tracking_link_must_be_https");
   return url.toString();
 }
