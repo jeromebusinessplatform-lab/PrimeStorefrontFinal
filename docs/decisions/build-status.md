@@ -1,7 +1,7 @@
 # Build Status
 
 ## Current phase
-Phase 3 — Revised checkout foundation (in progress)
+Sprint 2 — Delivery engine complete; Sprint 3 launch backlog next
 
 ## Authoritative architecture
 - Single PRIME deployment; no tenant model.
@@ -20,7 +20,7 @@ Phase 3 — Revised checkout foundation (in progress)
 - Telegram-only storefront identity guard.
 - GitHub Actions CI workflow for install, typecheck, tests, and build.
 - Admin Android WebView shell and APK CI pipeline.
-- Immutable PRIME Member ID generator/validator.
+- Immutable ten-character PRIME Member ID generator/validator.
 - Idempotent customer enrollment and Telegram-to-customer exchange foundation.
 - Revocable customer sessions and Admin session lifecycle foundation.
 - Commerce catalog/inventory schema and contracts.
@@ -29,18 +29,32 @@ Phase 3 — Revised checkout foundation (in progress)
 - Taggun analysis is explicitly non-blocking for order submission.
 - Revised order workflow with server-authoritative customer modification/cancellation locks.
 - Dispatch requires a valid HTTPS tracking link; customer order actions expose TRACK only when a link is present.
+- Sprint 2 warehouse and courier configurator schema in migration 0009_delivery_configurators.sql.
+- Warehouse/courier validation, persistence, update, default selection, and deactivation services.
+- Authenticated Admin warehouse and courier management endpoints.
+- Delivery pricing uses persisted courier configuration and integer minor-unit money arithmetic instead of hard-coded rate schedules.
+- Checkout delivery quote integration resolves the persisted default warehouse, active courier, Geoapify road route, and configured fee, and persists the quote/version/expiry on the checkout session.
+- Authenticated customer ownership is enforced for checkout delivery-quote mutations.
+- Phone-first Admin Delivery Management UI for warehouse and courier create/edit/default operations.
+- Delivery configuration, fee calculation, and checkout integration tests.
+- CI workflow fixed for repositories without a committed pnpm lockfile and for the current workspace TypeScript/React/Cloudflare typings.
+- Workflow coverage enforces HTTPS tracking links during dispatch.
 
 ## Validation
 - GitHub direct write path: verified.
-- Existing application source import/remix: none.
-- Full pnpm/typecheck/test/build execution: pending CI run.
-- Android APK assembly: workflow committed; successful Actions run pending.
+- Sprint 2 feature branch: feat/sprint-2-delivery-engine.
+- Full CI for Sprint 2 completed successfully on the feature branch: dependency installation, TypeScript typecheck, all tests, and build passed.
+- CodeRabbit status is successful on the reviewed Sprint 2 commit.
+- Sprint 2 changes are ready to merge.
 - Live Geoapify/Taggun calls: not performed from this repository write session.
 - Production Cloudflare mutations: not performed.
 
-## Next vertical slice
-1. Wire revised order workflow transitions into authenticated Admin and customer HTTP routes.
-2. Build the phone-first Admin Order Management card with dynamic REVIEW/MODIFY/CANCEL actions.
-3. Add mandatory Tracking Link input to the Admin DISPATCH action and customer TRACK affordance.
-4. Implement server-authoritative cart operations and checkout order creation.
-5. Build the compact Telegram checkout UI around the revised seven-step flow.
+## Sprint 2 result
+Sprint 2 delivery engine is complete for the requested implementation scope.
+
+## Remaining launch backlog
+1. Complete commerce workflow HTTP routes and UI.
+2. Customer checkout UI and tracking UI.
+3. Coupon and referral engines.
+4. Loyalty modules (points, tiers, badges, store credit).
+5. Production Cloudflare configuration, secrets, domain bindings, and end-to-end live validation.

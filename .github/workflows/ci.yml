@@ -2,7 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - feat/sprint-2-delivery-engine
   pull_request:
 
 permissions:
@@ -24,7 +26,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
       - name: Typecheck

@@ -24,6 +24,7 @@ describe("order workflow overrides", () => {
   it("requires an HTTPS tracking link before dispatch", () => {
     expect(() => transitionOrder({ state: "AWAITING_RIDER", action: "DISPATCH" })).toThrowError("tracking_link_required_for_dispatch");
     expect(() => transitionOrder({ state: "AWAITING_RIDER", action: "DISPATCH", trackingLink: "http://example.com/track/1" })).toThrowError("tracking_link_must_be_https");
+    expect(() => transitionOrder({ state: "AWAITING_RIDER", action: "DISPATCH", trackingLink: "javascript:alert(1)" })).toThrowError("tracking_link_must_be_https");
     expect(transitionOrder({ state: "AWAITING_RIDER", action: "DISPATCH", trackingLink: "https://example.com/track/1" })).toBe("DISPATCHED");
   });
 
@@ -37,7 +38,8 @@ describe("order workflow overrides", () => {
     expect(normalizeTrackingLink("  https://example.com/track/1  ")).toBe("https://example.com/track/1");
   });
 
-  it("rejects non-https tracking links", () => {
+  it("rejects non-https or malformed tracking links", () => {
     expect(() => normalizeTrackingLink("javascript:alert(1)")).toThrowError(InvalidOrderTransition);
+    expect(() => normalizeTrackingLink("not a url")).toThrowError("tracking_link_invalid");
   });
 });
