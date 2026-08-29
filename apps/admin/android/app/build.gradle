@@ -2,6 +2,8 @@ plugins {
     id 'com.android.application'
 }
 
+def adminUrl = providers.gradleProperty('adminUrl').orElse('https://admin.prime.example').get()
+
 android {
     namespace 'com.prime.admin'
     compileSdk 35
@@ -12,7 +14,7 @@ android {
         targetSdk 35
         versionCode 1
         versionName '0.1.0'
-        buildConfigField 'String', 'ADMIN_URL', '"https://admin.prime.example"'
+        buildConfigField 'String', 'ADMIN_URL', '"' + adminUrl.replace('"', '\\"') + '"'
     }
 
     buildFeatures {
