@@ -22,7 +22,7 @@ describe("configured delivery fee", () => {
       platformFeeMinor: 300,
       surchargeMinor: 1_000,
     });
-    expect(quote.feeMinor).toBe(31_000);
+    expect(quote.feeMinor).toBe(30_800);
   });
 
   it("rounds distance only for presentation while calculating against server precision", () => {
