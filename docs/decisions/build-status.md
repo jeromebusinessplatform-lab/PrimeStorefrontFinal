@@ -43,7 +43,8 @@ Sprint 2 — Delivery engine complete; Sprint 3 launch backlog next
 ## Validation
 - GitHub direct write path: verified.
 - Sprint 2 feature branch: feat/sprint-2-delivery-engine.
-- Latest Sprint 2 CI run passed dependency installation, TypeScript typecheck, all tests, and build.
+- Latest full Sprint 2 CI: PASS — dependency installation, TypeScript typecheck, all tests, and build.
+- Latest branch head: `e28ab4a890b16384e8ebf98b7239463a62b1b748`.
 - Sprint 2 changes are ready to merge.
 - Live Geoapify/Taggun calls: not performed from this repository write session.
 - Production Cloudflare mutations: not performed.
