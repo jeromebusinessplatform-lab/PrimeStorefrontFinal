@@ -5,9 +5,16 @@ import "./styles.css";
 type Warehouse = { id: string; name: string; address: string; latitude: number; longitude: number; isDefault: boolean; isActive: boolean };
 type Courier = { id: string; name: string; type: "standard" | "express" | "priority"; baseFeeMinor: number; perKmRateMinor: number; platformFeeMinor: number; surchargeMinor: number; isActive: boolean };
 
+type ApiError = { error?: string };
+function element<T extends HTMLElement>(id: string): T { return document.getElementById(id) as T; }
+async function responseError(response: Response, fallback: string): Promise<Error> {
+  const body = await response.json().catch(() => null) as ApiError | null;
+  return new Error(body?.error ?? fallback);
+}
+
 async function login(accessCode: string): Promise<void> {
   const response = await fetch("/admin/auth/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ accessCode }), credentials: "include" });
-  if (!response.ok) throw new Error("admin_auth_failed");
+  if (!response.ok) throw await responseError(response, "admin_auth_failed");
 }
 async function hasSession(): Promise<boolean> {
   const response = await fetch("/admin/auth/session", { credentials: "include", cache: "no-store" });
@@ -18,28 +25,32 @@ async function getDeliveryConfig(): Promise<{ warehouses: Warehouse[]; couriers:
     fetch("/admin/delivery/warehouses", { credentials: "include", cache: "no-store" }),
     fetch("/admin/delivery/couriers", { credentials: "include", cache: "no-store" }),
   ]);
-  if (!warehouses.ok || !couriers.ok) throw new Error("delivery_config_load_failed");
-  return { warehouses: (await warehouses.json()).warehouses, couriers: (await couriers.json()).couriers };
+  if (!warehouses.ok) throw await responseError(warehouses, "warehouse_load_failed");
+  if (!couriers.ok) throw await responseError(couriers, "courier_load_failed");
+  return {
+    warehouses: ((await warehouses.json()) as { warehouses: Warehouse[] }).warehouses,
+    couriers: ((await couriers.json()) as { couriers: Courier[] }).couriers,
+  };
 }
 async function createWarehouse(input: Record<string, unknown>): Promise<void> {
   const response = await fetch("/admin/delivery/warehouses", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });
-  if (!response.ok) throw new Error((await response.json().catch(() => null))?.error ?? "warehouse_create_failed");
+  if (!response.ok) throw await responseError(response, "warehouse_create_failed");
 }
 async function createCourier(input: Record<string, unknown>): Promise<void> {
   const response = await fetch("/admin/delivery/couriers", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });
-  if (!response.ok) throw new Error((await response.json().catch(() => null))?.error ?? "courier_create_failed");
+  if (!response.ok) throw await responseError(response, "courier_create_failed");
 }
 async function setDefaultWarehouse(id: string): Promise<void> {
   const response = await fetch(`/admin/delivery/warehouses/${encodeURIComponent(id)}/default`, { method: "POST", credentials: "include" });
-  if (!response.ok) throw new Error("warehouse_default_failed");
+  if (!response.ok) throw await responseError(response, "warehouse_default_failed");
 }
 async function updateWarehouse(id: string, input: Record<string, unknown>): Promise<void> {
   const response = await fetch(`/admin/delivery/warehouses/${encodeURIComponent(id)}`, { method: "PATCH", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });
-  if (!response.ok) throw new Error((await response.json().catch(() => null))?.error ?? "warehouse_update_failed");
+  if (!response.ok) throw await responseError(response, "warehouse_update_failed");
 }
 async function updateCourier(id: string, input: Record<string, unknown>): Promise<void> {
   const response = await fetch(`/admin/delivery/couriers/${encodeURIComponent(id)}`, { method: "PATCH", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });
-  if (!response.ok) throw new Error((await response.json().catch(() => null))?.error ?? "courier_update_failed");
+  if (!response.ok) throw await responseError(response, "courier_update_failed");
 }
 
 function DeliveryManagement() {
@@ -76,12 +87,12 @@ function DeliveryManagement() {
             <input aria-label="Warehouse name" defaultValue={warehouse.name} id={`wh-name-${warehouse.id}`} />
             <input aria-label="Warehouse address" defaultValue={warehouse.address} id={`wh-address-${warehouse.id}`} />
             <div className="inline-fields"><input aria-label="Latitude" defaultValue={warehouse.latitude} id={`wh-lat-${warehouse.id}`} inputMode="decimal" /><input aria-label="Longitude" defaultValue={warehouse.longitude} id={`wh-lon-${warehouse.id}`} inputMode="decimal" /></div>
-            <div className="button-row"><button type="button" onClick={() => void action(async () => updateWarehouse(warehouse.id, { name: (document.getElementById(`wh-name-${warehouse.id}`) as HTMLInputElement).value, address: (document.getElementById(`wh-address-${warehouse.id}`) as HTMLInputElement).value, latitude: Number((document.getElementById(`wh-lat-${warehouse.id}`) as HTMLInputElement).value), longitude: Number((document.getElementById(`wh-lon-${warehouse.id}`) as HTMLInputElement).value) }))} disabled={busy}>Save</button><button type="button" onClick={() => setEditingWarehouse(null)} disabled={busy}>Cancel</button></div>
+            <div className="button-row"><button type="button" onClick={() => void action(() => updateWarehouse(warehouse.id, { name: element<HTMLInputElement>(`wh-name-${warehouse.id}`).value, address: element<HTMLInputElement>(`wh-address-${warehouse.id}`).value, latitude: Number(element<HTMLInputElement>(`wh-lat-${warehouse.id}`).value), longitude: Number(element<HTMLInputElement>(`wh-lon-${warehouse.id}`).value) }))} disabled={busy}>Save</button><button type="button" onClick={() => setEditingWarehouse(null)} disabled={busy}>Cancel</button></div>
           </div> : <div className="delivery-item" key={warehouse.id}>
             <strong>{warehouse.name}</strong><span className="muted">{warehouse.address}</span><span className="muted">{warehouse.latitude.toFixed(5)}, {warehouse.longitude.toFixed(5)} {warehouse.isDefault ? "• DEFAULT" : ""}</span>
             <div className="button-row"><button type="button" onClick={() => setEditingWarehouse(warehouse.id)} disabled={busy}>Edit</button>{!warehouse.isDefault && warehouse.isActive ? <button type="button" onClick={() => void action(() => setDefaultWarehouse(warehouse.id))} disabled={busy}>Set Default</button> : null}</div>
           </div>)}
-          <div className="delivery-item create-item"><strong>Add warehouse</strong><input id="new-wh-name" aria-label="New warehouse name" placeholder="Name" /><input id="new-wh-address" aria-label="New warehouse address" placeholder="Address" /><div className="inline-fields"><input id="new-wh-lat" aria-label="New latitude" placeholder="Latitude" inputMode="decimal" /><input id="new-wh-lon" aria-label="New longitude" placeholder="Longitude" inputMode="decimal" /></div><button type="button" onClick={() => void action(() => createWarehouse({ name: (document.getElementById("new-wh-name") as HTMLInputElement).value, address: (document.getElementById("new-wh-address") as HTMLInputElement).value, latitude: Number((document.getElementById("new-wh-lat") as HTMLInputElement).value), longitude: Number((document.getElementById("new-wh-lon") as HTMLInputElement).value) }))} disabled={busy}>Add Warehouse</button></div>
+          <div className="delivery-item create-item"><strong>Add warehouse</strong><input id="new-wh-name" aria-label="New warehouse name" placeholder="Name" /><input id="new-wh-address" aria-label="New warehouse address" placeholder="Address" /><div className="inline-fields"><input id="new-wh-lat" aria-label="New latitude" placeholder="Latitude" inputMode="decimal" /><input id="new-wh-lon" aria-label="New longitude" placeholder="Longitude" inputMode="decimal" /></div><button type="button" onClick={() => void action(() => createWarehouse({ name: element<HTMLInputElement>("new-wh-name").value, address: element<HTMLInputElement>("new-wh-address").value, latitude: Number(element<HTMLInputElement>("new-wh-lat").value), longitude: Number(element<HTMLInputElement>("new-wh-lon").value) }))} disabled={busy}>Add Warehouse</button></div>
         </div>
         <div>
           <h3>Couriers</h3>
@@ -91,9 +102,9 @@ function DeliveryManagement() {
             <select aria-label="Courier type" defaultValue={courier.type} id={`co-type-${courier.id}`}><option value="standard">Standard</option><option value="express">Express</option><option value="priority">Priority</option></select>
             <div className="inline-fields"><input aria-label="Base fee minor" defaultValue={courier.baseFeeMinor} id={`co-base-${courier.id}`} inputMode="numeric" /><input aria-label="Per kilometer rate minor" defaultValue={courier.perKmRateMinor} id={`co-km-${courier.id}`} inputMode="numeric" /></div>
             <div className="inline-fields"><input aria-label="Platform fee minor" defaultValue={courier.platformFeeMinor} id={`co-platform-${courier.id}`} inputMode="numeric" /><input aria-label="Surcharge minor" defaultValue={courier.surchargeMinor} id={`co-surcharge-${courier.id}`} inputMode="numeric" /></div>
-            <div className="button-row"><button type="button" onClick={() => void action(() => updateCourier(courier.id, { name: (document.getElementById(`co-name-${courier.id}`) as HTMLInputElement).value, type: (document.getElementById(`co-type-${courier.id}`) as HTMLSelectElement).value, baseFeeMinor: Number((document.getElementById(`co-base-${courier.id}`) as HTMLInputElement).value), perKmRateMinor: Number((document.getElementById(`co-km-${courier.id}`) as HTMLInputElement).value), platformFeeMinor: Number((document.getElementById(`co-platform-${courier.id}`) as HTMLInputElement).value), surchargeMinor: Number((document.getElementById(`co-surcharge-${courier.id}`) as HTMLInputElement).value) }))} disabled={busy}>Save</button><button type="button" onClick={() => setEditingCourier(null)} disabled={busy}>Cancel</button></div>
+            <div className="button-row"><button type="button" onClick={() => void action(() => updateCourier(courier.id, { name: element<HTMLInputElement>(`co-name-${courier.id}`).value, type: element<HTMLSelectElement>(`co-type-${courier.id}`).value, baseFeeMinor: Number(element<HTMLInputElement>(`co-base-${courier.id}`).value), perKmRateMinor: Number(element<HTMLInputElement>(`co-km-${courier.id}`).value), platformFeeMinor: Number(element<HTMLInputElement>(`co-platform-${courier.id}`).value), surchargeMinor: Number(element<HTMLInputElement>(`co-surcharge-${courier.id}`).value) }))} disabled={busy}>Save</button><button type="button" onClick={() => setEditingCourier(null)} disabled={busy}>Cancel</button></div>
           </div> : <div className="delivery-item" key={courier.id}><strong>{courier.name}</strong><span className="muted">{courier.type.toUpperCase()}</span><span className="muted">Base ₱{(courier.baseFeeMinor / 100).toFixed(2)} • ₱{(courier.perKmRateMinor / 100).toFixed(2)}/km</span><span className="muted">Platform ₱{(courier.platformFeeMinor / 100).toFixed(2)} • Surcharge ₱{(courier.surchargeMinor / 100).toFixed(2)}</span><div className="button-row"><button type="button" onClick={() => setEditingCourier(courier.id)} disabled={busy}>Edit</button></div></div>)}
-          <div className="delivery-item create-item"><strong>Add courier</strong><input id="new-co-name" aria-label="New courier name" placeholder="Name" /><select id="new-co-type" aria-label="New courier type" defaultValue="standard"><option value="standard">Standard</option><option value="express">Express</option><option value="priority">Priority</option></select><div className="inline-fields"><input id="new-co-base" aria-label="Base fee" placeholder="Base fee minor" inputMode="numeric" /><input id="new-co-km" aria-label="Per kilometer rate" placeholder="Per km minor" inputMode="numeric" /></div><div className="inline-fields"><input id="new-co-platform" aria-label="Platform fee" placeholder="Platform fee minor" inputMode="numeric" defaultValue="0" /><input id="new-co-surcharge" aria-label="Surcharge" placeholder="Surcharge minor" inputMode="numeric" defaultValue="0" /></div><button type="button" onClick={() => void action(() => createCourier({ name: (document.getElementById("new-co-name") as HTMLInputElement).value, type: (document.getElementById("new-co-type") as HTMLSelectElement).value, baseFeeMinor: Number((document.getElementById("new-co-base") as HTMLInputElement).value), perKmRateMinor: Number((document.getElementById("new-co-km") as HTMLInputElement).value), platformFeeMinor: Number((document.getElementById("new-co-platform") as HTMLInputElement).value), surchargeMinor: Number((document.getElementById("new-co-surcharge") as HTMLInputElement).value) }))} disabled={busy}>Add Courier</button></div>
+          <div className="delivery-item create-item"><strong>Add courier</strong><input id="new-co-name" aria-label="New courier name" placeholder="Name" /><select id="new-co-type" aria-label="New courier type" defaultValue="standard"><option value="standard">Standard</option><option value="express">Express</option><option value="priority">Priority</option></select><div className="inline-fields"><input id="new-co-base" aria-label="Base fee" placeholder="Base fee minor" inputMode="numeric" /><input id="new-co-km" aria-label="Per kilometer rate" placeholder="Per km minor" inputMode="numeric" /></div><div className="inline-fields"><input id="new-co-platform" aria-label="Platform fee" placeholder="Platform fee minor" inputMode="numeric" defaultValue="0" /><input id="new-co-surcharge" aria-label="Surcharge" placeholder="Surcharge minor" inputMode="numeric" defaultValue="0" /></div><button type="button" onClick={() => void action(() => createCourier({ name: element<HTMLInputElement>("new-co-name").value, type: element<HTMLSelectElement>("new-co-type").value, baseFeeMinor: Number(element<HTMLInputElement>("new-co-base").value), perKmRateMinor: Number(element<HTMLInputElement>("new-co-km").value), platformFeeMinor: Number(element<HTMLInputElement>("new-co-platform").value), surchargeMinor: Number(element<HTMLInputElement>("new-co-surcharge").value) }))} disabled={busy}>Add Courier</button></div>
         </div>
       </div>
     </>}
@@ -105,11 +116,10 @@ function App() {
   const [accessCode, setAccessCode] = useState("");
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
   useEffect(() => { void hasSession().then(setAuthenticated).catch(() => setAuthenticated(false)).finally(() => setBusy(false)); }, []);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError(null);
-    try { await login(accessCode); setAccessCode(""); setAuthenticated(true); } catch { setError("Access denied. Check the Admin Access Code."); } finally { setBusy(false); }
+    try { await login(accessCode); setAccessCode(""); setAuthenticated(true); } catch (e) { setError(e instanceof Error ? e.message : "Access denied. Check the Admin Access Code."); } finally { setBusy(false); }
   }
   if (busy && !authenticated) return <main className="shell"><section className="panel">Checking session…</section></main>;
   if (!authenticated) return <main className="shell auth-shell"><section className="panel auth-panel" aria-labelledby="admin-title"><div className="eyebrow">PRIME ADMIN</div><h1 id="admin-title">Admin Access</h1><p className="muted">Enter the Admin Access Code to continue.</p><form className="stack" onSubmit={submit}><label className="field"><span>Admin Access Code</span><input autoComplete="one-time-code" inputMode="text" type="password" value={accessCode} onChange={(event) => setAccessCode(event.target.value)} required /></label><button className="primary" type="submit" disabled={busy}>{busy ? "Verifying…" : "Enter Admin"}</button></form>{error ? <p className="error" role="alert">{error}</p> : null}</section></main>;
