@@ -31,28 +31,28 @@ Sprint 2 — Delivery engine completion (in progress)
 - Dispatch requires a valid HTTPS tracking link; customer order actions expose TRACK only when a link is present.
 - Sprint 2 warehouse and courier configurator schema in migration 0009_delivery_configurators.sql.
 - Warehouse/courier validation and persistence service.
-- Authenticated Admin warehouse and courier management endpoints.
+- Authenticated Admin warehouse and courier management endpoints, including edit/update operations.
 - Delivery pricing changed from hard-coded rate schedules to persisted courier configuration using integer minor-unit money arithmetic.
-- Delivery configurator and fee-calculation tests added/updated.
-- Warehouse and courier PATCH/edit operations.
-- Server-authoritative delivery quote service using the active default warehouse, selected active courier, Geoapify road routing, and persisted pricing configuration.
-- Authenticated Admin delivery quote endpoint.
-- Phone-first Admin Delivery Management UI for warehouse/courier listing, create, edit, and default selection.
+- Checkout delivery quote service now resolves the persisted default warehouse, active courier, Geoapify road route, and configured fee, and persists the resulting quote snapshot/linkage on the checkout session.
+- Customer checkout delivery-quote route enforces authenticated customer ownership of the checkout session.
+- Phone-first Admin Delivery Management UI for warehouse/courier create, edit, and default selection.
+- Delivery configuration, fee calculation, and checkout integration tests.
+- CI workflow hardened for repositories without a committed pnpm lockfile.
 
 ## Validation
 - GitHub direct write path: verified.
-- Sprint 2 feature branch created: feat/sprint-2-delivery-engine.
-- Delivery configuration TypeScript modules: statically typechecked in the local verification environment.
-- Delivery migration SQL: syntax and single-default constraint validated against SQLite.
-- Full pnpm/typecheck/test/build execution: pending CI run.
-- Android APK assembly: workflow committed; successful Actions run pending.
+- Sprint 2 feature branch: feat/sprint-2-delivery-engine.
+- Delivery modules and checkout quote path statically validated through source-level tests.
+- Latest GitHub CI iterations reached workspace typecheck and exposed/fixed React, Cloudflare, DOM, and test-mock typing regressions.
+- Fresh full CI validation is pending against the latest branch head after the final typing fixes.
 - Live Geoapify/Taggun calls: not performed from this repository write session.
 - Production Cloudflare mutations: not performed.
 
-## Sprint 2 remaining
-1. Integrate the delivery quote service into customer checkout quote creation so the persisted warehouse/courier configuration is consumed by the final order quote.
-2. Add end-to-end delivery quote tests covering persisted configuration, Geoapify route data, and checkout integration.
-3. Run CI, fix regressions, and complete PR review/merge.
+## Sprint 2 final gate
+1. Fresh full CI run on the latest branch head.
+2. Fix any remaining regression.
+3. Confirm green typecheck + tests + build.
+4. Merge PR #1 into main.
 
 ## Deferred launch backlog
 - Complete commerce workflow HTTP routes and UI.
