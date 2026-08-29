@@ -38,13 +38,13 @@ Sprint 2 — Delivery engine complete; Sprint 3 launch backlog next
 - Phone-first Admin Delivery Management UI for warehouse and courier create/edit/default operations.
 - Delivery configuration, fee calculation, and checkout integration tests.
 - CI workflow fixed for repositories without a committed pnpm lockfile and for the current workspace TypeScript/React/Cloudflare typings.
-- Workflow coverage now enforces HTTPS tracking links during dispatch.
+- Workflow coverage enforces HTTPS tracking links during dispatch.
 
 ## Validation
 - GitHub direct write path: verified.
 - Sprint 2 feature branch: feat/sprint-2-delivery-engine.
-- Latest full CI run for Sprint 2 passed dependency installation, TypeScript typecheck, all 24 tests, and the build.
-- Final branch validation is green before merge.
+- Latest Sprint 2 CI run passed dependency installation, TypeScript typecheck, all tests, and build.
+- Sprint 2 changes are ready to merge.
 - Live Geoapify/Taggun calls: not performed from this repository write session.
 - Production Cloudflare mutations: not performed.
 
