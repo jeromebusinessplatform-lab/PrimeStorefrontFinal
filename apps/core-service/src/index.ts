@@ -2,7 +2,7 @@ import { handleAdminLogin } from "./modules/admin/admin-login";
 import { validateAdminSession, ADMIN_SESSION_COOKIE } from "./modules/security/admin-session";
 import { handleTelegramCustomerExchange } from "./modules/auth/telegram-exchange";
 import { validateCustomerSession, CUSTOMER_SESSION_COOKIE } from "./modules/identity/customer-session";
-import { createDeliveryQuote } from "./modules/delivery/delivery-quote";
+import { createDeliveryQuote, applyCheckoutDeliveryQuote } from "./modules/delivery/delivery-quote";
 import { createCourier, createWarehouse, deactivateCourier, deactivateWarehouse, listCouriers, listWarehouses, setDefaultWarehouse, updateCourier, updateWarehouse } from "./modules/delivery/delivery-config-store";
 import type { CourierType } from "./modules/delivery/delivery-config";
 
@@ -21,10 +21,7 @@ export interface Env {
   GEOAPIFY_API_KEY?: string;
 }
 
-function jsonError(error: string, status: number): Response {
-  return Response.json({ error }, { status, headers: { "cache-control": "no-store" } });
-}
-
+function jsonError(error: string, status: number): Response { return Response.json({ error }, { status, headers: { "cache-control": "no-store" } }); }
 async function parseJson(request: Request): Promise<Record<string, unknown>> {
   const contentType = request.headers.get("content-type") ?? "";
   if (!contentType.toLowerCase().includes("application/json")) throw new Error("json_required");
@@ -32,35 +29,24 @@ async function parseJson(request: Request): Promise<Record<string, unknown>> {
   if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("invalid_json");
   return body as Record<string, unknown>;
 }
-
 function isString(value: unknown): value is string { return typeof value === "string" && value.trim().length > 0; }
 function isNonNegativeSafeInt(value: unknown): value is number { return typeof value === "number" && Number.isSafeInteger(value) && value >= 0; }
 function isFiniteNumber(value: unknown): value is number { return typeof value === "number" && Number.isFinite(value); }
-
-async function requireAdmin(env: Env, request: Request): Promise<boolean> {
-  if (!env.DB) return false;
-  return Boolean(await validateAdminSession(env.DB, request));
-}
+async function requireAdmin(env: Env, request: Request): Promise<boolean> { return Boolean(env.DB && await validateAdminSession(env.DB, request)); }
 
 async function handleAdminDelivery(request: Request, env: Env): Promise<Response> {
   if (!env.DB) return jsonError("database_unavailable", 503);
   if (!(await requireAdmin(env, request))) return jsonError("admin_auth_required", 401);
-
   const url = new URL(request.url);
   const path = url.pathname.replace(/^\/admin\/delivery\/?/, "");
   try {
     if (path === "warehouses" && request.method === "GET") return Response.json({ warehouses: await listWarehouses(env.DB) }, { headers: { "cache-control": "no-store" } });
     if (path === "couriers" && request.method === "GET") return Response.json({ couriers: await listCouriers(env.DB) }, { headers: { "cache-control": "no-store" } });
-
     if (path === "warehouses" && request.method === "POST") {
       const body = await parseJson(request);
       if (!isString(body.name) || !isString(body.address) || !isFiniteNumber(body.latitude) || !isFiniteNumber(body.longitude)) return jsonError("invalid_warehouse", 400);
-      return Response.json(await createWarehouse(env.DB, {
-        name: body.name, address: body.address, latitude: body.latitude, longitude: body.longitude,
-        isDefault: body.isDefault === true, isActive: body.isActive !== false,
-      }), { status: 201, headers: { "cache-control": "no-store" } });
+      return Response.json(await createWarehouse(env.DB, { name: body.name, address: body.address, latitude: body.latitude, longitude: body.longitude, isDefault: body.isDefault === true, isActive: body.isActive !== false }), { status: 201, headers: { "cache-control": "no-store" } });
     }
-
     const warehouseMatch = path.match(/^warehouses\/([^/]+)$/);
     if (warehouseMatch && request.method === "PATCH") {
       const body = await parseJson(request);
@@ -73,21 +59,11 @@ async function handleAdminDelivery(request: Request, env: Env): Promise<Response
       if (body.isDefault !== undefined) { if (typeof body.isDefault !== "boolean") return jsonError("invalid_warehouse_default", 400); patch.isDefault = body.isDefault; }
       return Response.json(await updateWarehouse(env.DB, warehouseMatch[1], patch), { headers: { "cache-control": "no-store" } });
     }
-
     if (path === "couriers" && request.method === "POST") {
       const body = await parseJson(request);
-      if (!isString(body.name) || !["standard", "express", "priority"].includes(body.type as string)
-        || !isNonNegativeSafeInt(body.baseFeeMinor) || !isNonNegativeSafeInt(body.perKmRateMinor)
-        || !isNonNegativeSafeInt(body.platformFeeMinor ?? 0) || !isNonNegativeSafeInt(body.surchargeMinor ?? 0)) return jsonError("invalid_courier", 400);
-      return Response.json(await createCourier(env.DB, {
-        name: body.name, type: body.type as CourierType,
-        logoObjectKey: isString(body.logoObjectKey) ? body.logoObjectKey : null,
-        baseFeeMinor: body.baseFeeMinor, perKmRateMinor: body.perKmRateMinor,
-        platformFeeMinor: body.platformFeeMinor ?? 0, surchargeMinor: body.surchargeMinor ?? 0,
-        isActive: body.isActive !== false,
-      }), { status: 201, headers: { "cache-control": "no-store" } });
+      if (!isString(body.name) || !["standard", "express", "priority"].includes(body.type as string) || !isNonNegativeSafeInt(body.baseFeeMinor) || !isNonNegativeSafeInt(body.perKmRateMinor) || !isNonNegativeSafeInt(body.platformFeeMinor ?? 0) || !isNonNegativeSafeInt(body.surchargeMinor ?? 0)) return jsonError("invalid_courier", 400);
+      return Response.json(await createCourier(env.DB, { name: body.name, type: body.type as CourierType, logoObjectKey: isString(body.logoObjectKey) ? body.logoObjectKey : null, baseFeeMinor: body.baseFeeMinor, perKmRateMinor: body.perKmRateMinor, platformFeeMinor: body.platformFeeMinor ?? 0, surchargeMinor: body.surchargeMinor ?? 0, isActive: body.isActive !== false }), { status: 201, headers: { "cache-control": "no-store" } });
     }
-
     const courierMatch = path.match(/^couriers\/([^/]+)$/);
     if (courierMatch && request.method === "PATCH") {
       const body = await parseJson(request);
@@ -101,18 +77,13 @@ async function handleAdminDelivery(request: Request, env: Env): Promise<Response
       if (body.isActive !== undefined) { if (typeof body.isActive !== "boolean") return jsonError("invalid_courier_active", 400); patch.isActive = body.isActive; }
       return Response.json(await updateCourier(env.DB, courierMatch[1], patch), { headers: { "cache-control": "no-store" } });
     }
-
     const warehouseAction = path.match(/^warehouses\/([^/]+)\/(default|deactivate)$/);
     if (warehouseAction && request.method === "POST") {
       const [, warehouseId, action] = warehouseAction;
-      return Response.json(action === "default"
-        ? await setDefaultWarehouse(env.DB, warehouseId)
-        : await deactivateWarehouse(env.DB, warehouseId), { headers: { "cache-control": "no-store" } });
+      return Response.json(action === "default" ? await setDefaultWarehouse(env.DB, warehouseId) : await deactivateWarehouse(env.DB, warehouseId), { headers: { "cache-control": "no-store" } });
     }
-
     const courierDeactivate = path.match(/^couriers\/([^/]+)\/deactivate$/);
     if (courierDeactivate && request.method === "POST") return Response.json(await deactivateCourier(env.DB, courierDeactivate[1]), { headers: { "cache-control": "no-store" } });
-
     if (path === "quote" && request.method === "POST") {
       if (!env.GEOAPIFY_API_KEY) return jsonError("geoapify_not_configured", 503);
       const body = await parseJson(request);
@@ -130,12 +101,43 @@ async function handleAdminDelivery(request: Request, env: Env): Promise<Response
   return jsonError("not_found", 404);
 }
 
+async function handleCustomerCheckout(request: Request, env: Env): Promise<Response> {
+  if (!env.DB) return jsonError("database_unavailable", 503);
+  const session = await validateCustomerSession(env.DB, request);
+  if (!session) return jsonError("telegram_session_required", 401);
+  if (!env.GEOAPIFY_API_KEY) return jsonError("geoapify_not_configured", 503);
+  try {
+    const body = await parseJson(request);
+    if (!isString(body.checkoutSessionId) || !isString(body.courierId) || !isFiniteNumber(body.latitude) || !isFiniteNumber(body.longitude)) return jsonError("invalid_delivery_quote", 400);
+    return Response.json(await applyCheckoutDeliveryQuote(env.DB, {
+      checkoutSessionId: body.checkoutSessionId,
+      customerId: session.customer_id,
+      courierId: body.courierId,
+      latitude: body.latitude,
+      longitude: body.longitude,
+    }, env.GEOAPIFY_API_KEY), { headers: { "cache-control": "private, no-store" } });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "checkout_delivery_quote_failed";
+    if (message === "checkout_forbidden") return jsonError(message, 403);
+    if (["checkout_session_required", "customer_required", "invalid_delivery_quote", "invalid_customer_latitude", "invalid_customer_longitude", "checkout_not_found"].includes(message)) return jsonError(message, message === "checkout_not_found" ? 404 : 400);
+    if (["default_warehouse_not_configured", "warehouse_inactive"].includes(message)) return jsonError(message, 409);
+    if (["courier_not_found"].includes(message)) return jsonError(message, 404);
+    if (["geoapify_api_key_required", "geoapify_route_failed", "geoapify_route_invalid"].includes(message)) return jsonError(message, 502);
+    return jsonError(message, 500);
+  }
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     if (url.pathname === "/health") return Response.json({ ok: true, service: "prime-core-service", env: env.APP_ENV });
     if (!env.DB) return jsonError("database_unavailable", 503);
     if (url.pathname.startsWith("/admin/delivery/")) return handleAdminDelivery(request, env);
+    if (url.pathname === "/customer/auth/exchange") {
+      if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_BOT_ID) return jsonError("telegram_auth_not_configured", 503);
+      return handleTelegramCustomerExchange(request, { DB: env.DB, TELEGRAM_BOT_TOKEN: env.TELEGRAM_BOT_TOKEN, TELEGRAM_BOT_ID: env.TELEGRAM_BOT_ID });
+    }
+    if (url.pathname === "/customer/checkout/delivery-quote" && request.method === "POST") return handleCustomerCheckout(request, env);
     if (url.pathname === "/admin/auth/login") {
       if (!env.ADMIN_ACCESS_CODE_VERIFIER) return jsonError("admin_auth_not_configured", 503);
       return handleAdminLogin(request, { DB: env.DB, ADMIN_ACCESS_CODE_VERIFIER: env.ADMIN_ACCESS_CODE_VERIFIER });
@@ -144,10 +146,6 @@ export default {
       const session = await validateAdminSession(env.DB, request);
       if (!session) return jsonError("admin_auth_required", 401);
       return Response.json({ ok: true, sessionId: session.id }, { headers: { "cache-control": "no-store" } });
-    }
-    if (url.pathname === "/customer/auth/exchange") {
-      if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_BOT_ID) return jsonError("telegram_auth_not_configured", 503);
-      return handleTelegramCustomerExchange(request, { DB: env.DB, TELEGRAM_BOT_TOKEN: env.TELEGRAM_BOT_TOKEN, TELEGRAM_BOT_ID: env.TELEGRAM_BOT_ID });
     }
     if (url.pathname === "/customer/auth/session" && request.method === "GET") {
       const session = await validateCustomerSession(env.DB, request);
