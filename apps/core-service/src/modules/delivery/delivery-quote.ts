@@ -6,6 +6,7 @@ interface D1Like {
   prepare(sql: string): {
     bind(...values: unknown[]): {
       first<T = unknown>(): Promise<T | null>;
+      all<T = unknown>(): Promise<{ results: T[] }>;
       run(): Promise<unknown>;
     };
   };
@@ -64,34 +65,24 @@ export async function applyCheckoutDeliveryQuote(
 }> {
   if (!input.checkoutSessionId.trim()) throw new Error("checkout_session_required");
   if (!input.customerId.trim()) throw new Error("customer_required");
+  if (!Number.isFinite(input.latitude) || input.latitude < -90 || input.latitude > 90) throw new Error("invalid_customer_latitude");
+  if (!Number.isFinite(input.longitude) || input.longitude < -180 || input.longitude > 180) throw new Error("invalid_customer_longitude");
   const checkout = await db.prepare(
     "SELECT id, customer_id, delivery_quote_version FROM checkout_sessions WHERE id = ? AND status != 'expired' LIMIT 1",
   ).bind(input.checkoutSessionId).first<{ id: string; customer_id: string; delivery_quote_version: number | null }>();
   if (!checkout) throw new Error("checkout_not_found");
   if (checkout.customer_id !== input.customerId) throw new Error("checkout_forbidden");
 
-  const quote = await createDeliveryQuote(db, {
-    courierId: input.courierId,
-    latitude: input.latitude,
-    longitude: input.longitude,
-  }, geoapifyApiKey);
+  const quote = await createDeliveryQuote(db, { courierId: input.courierId, latitude: input.latitude, longitude: input.longitude }, geoapifyApiKey);
   const now = input.now ?? new Date();
   const quoteVersion = (checkout.delivery_quote_version ?? 0) + 1;
   const expiresAt = new Date(now.getTime() + 15 * 60 * 1000).toISOString();
   await db.prepare(
-    "UPDATE checkout_sessions SET delivery_warehouse_id = ?, delivery_courier_id = ?, delivery_distance_meters = ?, delivery_duration_seconds = ?, delivery_fee_amount = ?, delivery_fee_currency = 'PHP', delivery_quote_version = ?, delivery_quote_expires_at = ?, updated_at = ? WHERE id = ? AND customer_id = ? AND status != 'expired'",
+    "UPDATE checkout_sessions SET delivery_warehouse_id = ?, delivery_courier_id = ?, delivery_distance_meters = ?, delivery_duration_seconds = ?, delivery_fee_amount = ?, delivery_fee_currency = 'PHP', delivery_base_fee_minor = ?, delivery_distance_fee_minor = ?, delivery_platform_fee_minor = ?, delivery_surcharge_minor = ?, delivery_quote_version = ?, delivery_quote_expires_at = ?, updated_at = ? WHERE id = ? AND customer_id = ? AND status != 'expired'",
   ).bind(
-    quote.warehouse.id,
-    quote.courier.id,
-    quote.route.distanceMeters,
-    quote.route.durationSeconds,
-    quote.fee.feeMinor,
-    quoteVersion,
-    expiresAt,
-    now.toISOString(),
-    checkout.id,
-    input.customerId,
+    quote.warehouse.id, quote.courier.id, quote.route.distanceMeters, quote.route.durationSeconds, quote.fee.feeMinor,
+    quote.fee.baseFeeMinor, quote.fee.distanceFeeMinor, quote.fee.platformFeeMinor, quote.fee.surchargeMinor,
+    quoteVersion, expiresAt, now.toISOString(), checkout.id, input.customerId,
   ).run();
-
   return { ...quote, checkoutSessionId: checkout.id, quoteVersion, expiresAt };
 }
