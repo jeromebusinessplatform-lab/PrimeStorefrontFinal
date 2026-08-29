@@ -4,14 +4,12 @@ import "./styles.css";
 
 type Warehouse = { id: string; name: string; address: string; latitude: number; longitude: number; isDefault: boolean; isActive: boolean };
 type Courier = { id: string; name: string; type: "standard" | "express" | "priority"; baseFeeMinor: number; perKmRateMinor: number; platformFeeMinor: number; surchargeMinor: number; isActive: boolean };
-
 type ApiError = { error?: string };
-function element<T extends HTMLElement>(id: string): T { return document.getElementById(id) as T; }
+function element<T extends Element>(id: string): T { return document.getElementById(id) as T; }
 async function responseError(response: Response, fallback: string): Promise<Error> {
   const body = await response.json().catch(() => null) as ApiError | null;
   return new Error(body?.error ?? fallback);
 }
-
 async function login(accessCode: string): Promise<void> {
   const response = await fetch("/admin/auth/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ accessCode }), credentials: "include" });
   if (!response.ok) throw await responseError(response, "admin_auth_failed");
@@ -21,16 +19,15 @@ async function hasSession(): Promise<boolean> {
   return response.ok;
 }
 async function getDeliveryConfig(): Promise<{ warehouses: Warehouse[]; couriers: Courier[] }> {
-  const [warehouses, couriers] = await Promise.all([
+  const [warehousesResponse, couriersResponse] = await Promise.all([
     fetch("/admin/delivery/warehouses", { credentials: "include", cache: "no-store" }),
     fetch("/admin/delivery/couriers", { credentials: "include", cache: "no-store" }),
   ]);
-  if (!warehouses.ok) throw await responseError(warehouses, "warehouse_load_failed");
-  if (!couriers.ok) throw await responseError(couriers, "courier_load_failed");
-  return {
-    warehouses: ((await warehouses.json()) as { warehouses: Warehouse[] }).warehouses,
-    couriers: ((await couriers.json()) as { couriers: Courier[] }).couriers,
-  };
+  if (!warehousesResponse.ok) throw await responseError(warehousesResponse, "warehouse_load_failed");
+  if (!couriersResponse.ok) throw await responseError(couriersResponse, "courier_load_failed");
+  const warehousesBody = await warehousesResponse.json() as { warehouses: Warehouse[] };
+  const couriersBody = await couriersResponse.json() as { couriers: Courier[] };
+  return { warehouses: warehousesBody.warehouses, couriers: couriersBody.couriers };
 }
 async function createWarehouse(input: Record<string, unknown>): Promise<void> {
   const response = await fetch("/admin/delivery/warehouses", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });
@@ -69,7 +66,6 @@ function DeliveryManagement() {
     finally { setLoading(false); }
   }
   useEffect(() => { void reload(); }, []);
-
   async function action(work: () => Promise<void>) {
     setBusy(true); setError(null);
     try { await work(); await reload(); } catch (e) { setError(e instanceof Error ? e.message : "delivery_operation_failed"); } finally { setBusy(false); }
@@ -81,8 +77,7 @@ function DeliveryManagement() {
     {loading ? <p className="muted">Loading delivery configuration…</p> : <>
       <div className="delivery-columns">
         <div>
-          <h3>Warehouses</h3>
-          <p className="muted">Exactly one active default is used as the routing origin.</p>
+          <h3>Warehouses</h3><p className="muted">Exactly one active default is used as the routing origin.</p>
           {warehouses.map((warehouse) => editingWarehouse === warehouse.id ? <div className="delivery-item" key={warehouse.id}>
             <input aria-label="Warehouse name" defaultValue={warehouse.name} id={`wh-name-${warehouse.id}`} />
             <input aria-label="Warehouse address" defaultValue={warehouse.address} id={`wh-address-${warehouse.id}`} />
@@ -95,8 +90,7 @@ function DeliveryManagement() {
           <div className="delivery-item create-item"><strong>Add warehouse</strong><input id="new-wh-name" aria-label="New warehouse name" placeholder="Name" /><input id="new-wh-address" aria-label="New warehouse address" placeholder="Address" /><div className="inline-fields"><input id="new-wh-lat" aria-label="New latitude" placeholder="Latitude" inputMode="decimal" /><input id="new-wh-lon" aria-label="New longitude" placeholder="Longitude" inputMode="decimal" /></div><button type="button" onClick={() => void action(() => createWarehouse({ name: element<HTMLInputElement>("new-wh-name").value, address: element<HTMLInputElement>("new-wh-address").value, latitude: Number(element<HTMLInputElement>("new-wh-lat").value), longitude: Number(element<HTMLInputElement>("new-wh-lon").value) }))} disabled={busy}>Add Warehouse</button></div>
         </div>
         <div>
-          <h3>Couriers</h3>
-          <p className="muted">Pricing is stored in PHP minor units (₱100 = 10000).</p>
+          <h3>Couriers</h3><p className="muted">Pricing is stored in PHP minor units (₱100 = 10000).</p>
           {couriers.map((courier) => editingCourier === courier.id ? <div className="delivery-item" key={courier.id}>
             <input aria-label="Courier name" defaultValue={courier.name} id={`co-name-${courier.id}`} />
             <select aria-label="Courier type" defaultValue={courier.type} id={`co-type-${courier.id}`}><option value="standard">Standard</option><option value="express">Express</option><option value="priority">Priority</option></select>
@@ -117,10 +111,7 @@ function App() {
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => { void hasSession().then(setAuthenticated).catch(() => setAuthenticated(false)).finally(() => setBusy(false)); }, []);
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setBusy(true); setError(null);
-    try { await login(accessCode); setAccessCode(""); setAuthenticated(true); } catch (e) { setError(e instanceof Error ? e.message : "Access denied. Check the Admin Access Code."); } finally { setBusy(false); }
-  }
+  async function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); setBusy(true); setError(null); try { await login(accessCode); setAccessCode(""); setAuthenticated(true); } catch (e) { setError(e instanceof Error ? e.message : "Access denied. Check the Admin Access Code."); } finally { setBusy(false); } }
   if (busy && !authenticated) return <main className="shell"><section className="panel">Checking session…</section></main>;
   if (!authenticated) return <main className="shell auth-shell"><section className="panel auth-panel" aria-labelledby="admin-title"><div className="eyebrow">PRIME ADMIN</div><h1 id="admin-title">Admin Access</h1><p className="muted">Enter the Admin Access Code to continue.</p><form className="stack" onSubmit={submit}><label className="field"><span>Admin Access Code</span><input autoComplete="one-time-code" inputMode="text" type="password" value={accessCode} onChange={(event) => setAccessCode(event.target.value)} required /></label><button className="primary" type="submit" disabled={busy}>{busy ? "Verifying…" : "Enter Admin"}</button></form>{error ? <p className="error" role="alert">{error}</p> : null}</section></main>;
   return <main className="shell"><header className="topbar"><div><div className="eyebrow">PRIME ADMIN</div><h1>Control Center</h1></div><span className="status">Authenticated</span></header><section className="stack cards" aria-label="Admin modules"><article className="panel compact-card"><strong>Orders</strong><span className="muted">Review and process customer orders.</span></article><article className="panel compact-card"><strong>Catalog</strong><span className="muted">Products, categories, and media.</span></article><article className="panel compact-card"><strong>Inventory</strong><span className="muted">Stock levels and movement history.</span></article><article className="panel compact-card"><strong>Payments</strong><span className="muted">Payment proofs and review decisions.</span></article><article className="panel compact-card"><strong>POS</strong><span className="muted">Walk-in order operations.</span></article></section><DeliveryManagement /></main>;
