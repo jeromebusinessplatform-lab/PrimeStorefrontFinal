@@ -1,7 +1,7 @@
 # Build Status
 
 ## Current phase
-Phase 2 — Commerce foundation (in progress)
+Phase 2 — Identity, sessions, cart, and order foundation (in progress)
 
 ## Authoritative architecture
 - Single PRIME deployment; no tenant model.
@@ -20,18 +20,26 @@ Phase 2 — Commerce foundation (in progress)
 - Immutable PRIME Member ID generator/validator.
 - Telegram webhook secret/update-id boundary and focused coverage.
 - Obsolete tenant-context source module removed.
-- Commerce catalog/inventory D1 schema for categories, products, product images, inventory, and movement ledger.
-- Shared commerce contracts and server-side available-inventory guard.
+- Commerce catalog/inventory D1 schema and contracts.
+- Idempotent customer enrollment service with immutable PRIME Member ID assignment.
+- Revocable customer sessions issued by Telegram exchange.
+- Admin session creation/validation/revocation middleware.
+- Telegram-to-customer exchange HTTP endpoint.
+- Admin Access Code login HTTP endpoint.
+- Core Service auth/session route wiring.
+- Cart and order schema with selective cart-line checkout state and immutable order events.
+- Focused PRIME Member ID and customer enrollment tests.
 
 ## Validation
 - GitHub direct write path: verified.
 - Existing application source import/remix: none.
 - Full pnpm/typecheck/test/build execution: pending CI run.
 - Production Cloudflare mutations: not performed.
+- HTTP integration tests against live D1: pending connected execution runtime.
 
 ## Next vertical slice
-1. Add customer enrollment service backed by D1 and idempotent Telegram identity keys.
-2. Wire Admin access-code verification/session lifecycle into Core Service HTTP routes.
-3. Wire Telegram webhook ingestion and deduplication into Core Service routes.
-4. Expose authenticated catalog reads through the Storefront boundary and Admin catalog mutation endpoints.
-5. Add cart schema and server-authoritative cart operations, then move into checkout/order state.
+1. Wire Telegram webhook ingestion to D1 deduplication and enrollment refresh.
+2. Add server-authoritative cart operations (add/update/select/remove) with inventory checks.
+3. Add catalog read API and Admin catalog mutation API.
+4. Implement checkout quote/price calculation and order creation from selected cart lines.
+5. Implement payment proof lifecycle and payment-review queue.
