@@ -1,7 +1,7 @@
 # Build Status
 
 ## Current phase
-Sprint 2 — Delivery engine complete; Sprint 3 launch backlog next
+Sprint 4 — Payments, proof upload, receipt analysis, and review boundary in implementation
 
 ## Authoritative architecture
 - Single PRIME deployment; no tenant model.
@@ -25,8 +25,7 @@ Sprint 2 — Delivery engine complete; Sprint 3 launch backlog next
 - Revocable customer sessions and Admin session lifecycle foundation.
 - Commerce catalog/inventory schema and contracts.
 - Cart and order foundation.
-- Revised checkout state model with receiver details, Geoapify address selection, delivery provider/payment method, payment receipt storage, and independent Taggun analysis state.
-- Taggun analysis is explicitly non-blocking for order submission.
+- Revised checkout state model with receiver details, Geoapify address selection, delivery provider/payment method, payment receipt storage, and independent receipt analysis state.
 - Revised order workflow with server-authoritative customer modification/cancellation locks.
 - Dispatch requires a valid HTTPS tracking link; customer order actions expose TRACK only when a link is present.
 - Sprint 2 warehouse and courier configurator schema in migration 0009_delivery_configurators.sql.
@@ -40,21 +39,32 @@ Sprint 2 — Delivery engine complete; Sprint 3 launch backlog next
 - CI workflow fixed for repositories without a committed pnpm lockfile and for the current workspace TypeScript/React/Cloudflare typings.
 - Workflow coverage enforces HTTPS tracking links during dispatch.
 
+## Sprint 4 implementation in this branch
+- Versioned payment-method configuration for Static QR Ph and one card-gateway adapter.
+- Payment intent records bound to a server-rebuilt checkout/cart quote snapshot and selected cart lines.
+- Private R2 payment-proof storage with media-type, size, hash, duplicate, mismatch, and provider-failure screening.
+- VALIDATED/UNVALIDATED proof classification where analyzer failure/inconclusive/timeout/unavailable never blocks a safe final submission.
+- Signed card-gateway webhook ingestion with external-event idempotency and settlement amount/currency verification.
+- Customer payment submission gate requiring safe proof before an order can enter payment_review.
+- Tenant-local DDMMYYHHMMSS order-number allocation with same-second collision suffixing.
+- Persisted five-row confirmation snapshot and owner-authorized live confirmation endpoint.
+- Authenticated Admin payment-review queue, human decision endpoint, and private evidence retrieval.
+- Card approvals require matching accepted gateway settlement; QR approvals always require proof; no AI/analyzer result auto-approves or auto-bans.
+
 ## Validation
 - GitHub direct write path: verified.
-- Sprint 2 feature branch: feat/sprint-2-delivery-engine.
-- Full CI for Sprint 2 completed successfully on the feature branch: dependency installation, TypeScript typecheck, all tests, and build passed.
-- CodeRabbit status is successful on the reviewed Sprint 2 commit.
-- Sprint 2 changes are ready to merge.
-- Live Geoapify/Taggun calls: not performed from this repository write session.
+- Sprint 2 full CI previously completed successfully on the feature branch.
+- Sprint 4 focused domain tests added; branch CI will be used for full typecheck/tests/build validation.
+- Live Geoapify/payment-provider calls: not performed from this repository write session.
 - Production Cloudflare mutations: not performed.
 
-## Sprint 2 result
-Sprint 2 delivery engine is complete for the requested implementation scope.
+## Sprint 4 result
+Implementation slice is committed on a dedicated Sprint 4 branch and is awaiting CI validation and review.
 
 ## Remaining launch backlog
 1. Complete commerce workflow HTTP routes and UI.
 2. Customer checkout UI and tracking UI.
 3. Coupon and referral engines.
 4. Loyalty modules (points, tiers, badges, store credit).
-5. Production Cloudflare configuration, secrets, domain bindings, and end-to-end live validation.
+5. Full POS/fulfillment/customer/support/fraud/reporting phases.
+6. Production Cloudflare configuration, secrets, domain bindings, and end-to-end live validation.

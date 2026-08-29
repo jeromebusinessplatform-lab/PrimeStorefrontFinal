@@ -4,6 +4,7 @@ import { handleTelegramCustomerExchange } from "./modules/auth/telegram-exchange
 import { validateCustomerSession, CUSTOMER_SESSION_COOKIE } from "./modules/identity/customer-session";
 import { createDeliveryQuote, applyCheckoutDeliveryQuote } from "./modules/delivery/delivery-quote";
 import { createCourier, createWarehouse, deactivateCourier, deactivateWarehouse, listCouriers, listWarehouses, setDefaultWarehouse, updateCourier, updateWarehouse } from "./modules/delivery/delivery-config-store";
+import { handleAdminPayment, handleCustomerPayment, handleGatewayWebhook } from "./modules/payment/payment-api";
 import type { CourierType } from "./modules/delivery/delivery-config";
 
 export interface Env {
@@ -19,6 +20,7 @@ export interface Env {
   TELEGRAM_BOT_TOKEN?: string;
   TELEGRAM_BOT_ID?: string;
   GEOAPIFY_API_KEY?: string;
+  CARD_GATEWAY_WEBHOOK_SECRET?: string;
 }
 
 function jsonError(error: string, status: number): Response { return Response.json({ error }, { status, headers: { "cache-control": "no-store" } }); }
@@ -122,13 +124,7 @@ async function handleCustomerCheckout(request: Request, env: Env): Promise<Respo
     const latitude = body.latitude;
     const longitude = body.longitude;
     if (!isString(checkoutSessionId) || !isString(courierId) || !isFiniteNumber(latitude) || !isFiniteNumber(longitude)) return jsonError("invalid_delivery_quote", 400);
-    return Response.json(await applyCheckoutDeliveryQuote(env.DB, {
-      checkoutSessionId,
-      customerId: session.customer_id,
-      courierId,
-      latitude,
-      longitude,
-    }, env.GEOAPIFY_API_KEY), { headers: { "cache-control": "private, no-store" } });
+    return Response.json(await applyCheckoutDeliveryQuote(env.DB, { checkoutSessionId, customerId: session.customer_id, courierId, latitude, longitude }, env.GEOAPIFY_API_KEY), { headers: { "cache-control": "private, no-store" } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "checkout_delivery_quote_failed";
     if (message === "checkout_forbidden") return jsonError(message, 403);
@@ -147,6 +143,17 @@ export default {
     if (url.pathname === "/health") return Response.json({ ok: true, service: "prime-core-service", env: env.APP_ENV });
     if (!env.DB) return jsonError("database_unavailable", 503);
     if (url.pathname.startsWith("/admin/delivery/")) return handleAdminDelivery(request, env);
+    if (url.pathname.startsWith("/admin/payments")) {
+      const session = await validateAdminSession(env.DB, request);
+      if (!session) return jsonError("admin_auth_required", 401);
+      return handleAdminPayment(request, env, session.id);
+    }
+    if (url.pathname.startsWith("/customer/checkout/payment-") || /^\/customer\/orders\/[^/]+\/confirmation$/.test(url.pathname)) {
+      const session = await validateCustomerSession(env.DB, request);
+      if (!session) return jsonError("telegram_session_required", 401);
+      return handleCustomerPayment(request, env, session.customer_id);
+    }
+    if (url.pathname === "/webhooks/card-gateway") return handleGatewayWebhook(request, env);
     if (url.pathname === "/customer/auth/exchange") {
       if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_BOT_ID) return jsonError("telegram_auth_not_configured", 503);
       return handleTelegramCustomerExchange(request, { DB: env.DB, TELEGRAM_BOT_TOKEN: env.TELEGRAM_BOT_TOKEN, TELEGRAM_BOT_ID: env.TELEGRAM_BOT_ID });
