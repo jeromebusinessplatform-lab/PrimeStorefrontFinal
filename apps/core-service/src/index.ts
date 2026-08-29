@@ -44,8 +44,10 @@ async function handleAdminDelivery(request: Request, env: Env): Promise<Response
     if (path === "couriers" && request.method === "GET") return Response.json({ couriers: await listCouriers(env.DB) }, { headers: { "cache-control": "no-store" } });
     if (path === "warehouses" && request.method === "POST") {
       const body = await parseJson(request);
-      if (!isString(body.name) || !isString(body.address) || !isFiniteNumber(body.latitude) || !isFiniteNumber(body.longitude)) return jsonError("invalid_warehouse", 400);
-      return Response.json(await createWarehouse(env.DB, { name: body.name, address: body.address, latitude: body.latitude, longitude: body.longitude, isDefault: body.isDefault === true, isActive: body.isActive !== false }), { status: 201, headers: { "cache-control": "no-store" } });
+      const latitude = body.latitude;
+      const longitude = body.longitude;
+      if (!isString(body.name) || !isString(body.address) || !isFiniteNumber(latitude) || !isFiniteNumber(longitude)) return jsonError("invalid_warehouse", 400);
+      return Response.json(await createWarehouse(env.DB, { name: body.name, address: body.address, latitude, longitude, isDefault: body.isDefault === true, isActive: body.isActive !== false }), { status: 201, headers: { "cache-control": "no-store" } });
     }
     const warehouseMatch = path.match(/^warehouses\/([^/]+)$/);
     if (warehouseMatch && request.method === "PATCH") {
@@ -61,8 +63,13 @@ async function handleAdminDelivery(request: Request, env: Env): Promise<Response
     }
     if (path === "couriers" && request.method === "POST") {
       const body = await parseJson(request);
-      if (!isString(body.name) || !["standard", "express", "priority"].includes(body.type as string) || !isNonNegativeSafeInt(body.baseFeeMinor) || !isNonNegativeSafeInt(body.perKmRateMinor) || !isNonNegativeSafeInt(body.platformFeeMinor ?? 0) || !isNonNegativeSafeInt(body.surchargeMinor ?? 0)) return jsonError("invalid_courier", 400);
-      return Response.json(await createCourier(env.DB, { name: body.name, type: body.type as CourierType, logoObjectKey: isString(body.logoObjectKey) ? body.logoObjectKey : null, baseFeeMinor: body.baseFeeMinor, perKmRateMinor: body.perKmRateMinor, platformFeeMinor: body.platformFeeMinor ?? 0, surchargeMinor: body.surchargeMinor ?? 0, isActive: body.isActive !== false }), { status: 201, headers: { "cache-control": "no-store" } });
+      const type = body.type;
+      const baseFeeMinor = body.baseFeeMinor;
+      const perKmRateMinor = body.perKmRateMinor;
+      const platformFeeMinor = body.platformFeeMinor ?? 0;
+      const surchargeMinor = body.surchargeMinor ?? 0;
+      if (!isString(body.name) || !["standard", "express", "priority"].includes(type as string) || !isNonNegativeSafeInt(baseFeeMinor) || !isNonNegativeSafeInt(perKmRateMinor) || !isNonNegativeSafeInt(platformFeeMinor) || !isNonNegativeSafeInt(surchargeMinor)) return jsonError("invalid_courier", 400);
+      return Response.json(await createCourier(env.DB, { name: body.name, type: type as CourierType, logoObjectKey: isString(body.logoObjectKey) ? body.logoObjectKey : null, baseFeeMinor, perKmRateMinor, platformFeeMinor, surchargeMinor, isActive: body.isActive !== false }), { status: 201, headers: { "cache-control": "no-store" } });
     }
     const courierMatch = path.match(/^couriers\/([^/]+)$/);
     if (courierMatch && request.method === "PATCH") {
@@ -87,8 +94,10 @@ async function handleAdminDelivery(request: Request, env: Env): Promise<Response
     if (path === "quote" && request.method === "POST") {
       if (!env.GEOAPIFY_API_KEY) return jsonError("geoapify_not_configured", 503);
       const body = await parseJson(request);
-      if (!isString(body.courierId) || !isFiniteNumber(body.latitude) || !isFiniteNumber(body.longitude)) return jsonError("invalid_delivery_quote", 400);
-      return Response.json(await createDeliveryQuote(env.DB, { courierId: body.courierId, latitude: body.latitude, longitude: body.longitude }, env.GEOAPIFY_API_KEY), { headers: { "cache-control": "no-store" } });
+      const latitude = body.latitude;
+      const longitude = body.longitude;
+      if (!isString(body.courierId) || !isFiniteNumber(latitude) || !isFiniteNumber(longitude)) return jsonError("invalid_delivery_quote", 400);
+      return Response.json(await createDeliveryQuote(env.DB, { courierId: body.courierId, latitude, longitude }, env.GEOAPIFY_API_KEY), { headers: { "cache-control": "no-store" } });
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "delivery_operation_failed";
@@ -108,20 +117,25 @@ async function handleCustomerCheckout(request: Request, env: Env): Promise<Respo
   if (!env.GEOAPIFY_API_KEY) return jsonError("geoapify_not_configured", 503);
   try {
     const body = await parseJson(request);
-    if (!isString(body.checkoutSessionId) || !isString(body.courierId) || !isFiniteNumber(body.latitude) || !isFiniteNumber(body.longitude)) return jsonError("invalid_delivery_quote", 400);
+    const checkoutSessionId = body.checkoutSessionId;
+    const courierId = body.courierId;
+    const latitude = body.latitude;
+    const longitude = body.longitude;
+    if (!isString(checkoutSessionId) || !isString(courierId) || !isFiniteNumber(latitude) || !isFiniteNumber(longitude)) return jsonError("invalid_delivery_quote", 400);
     return Response.json(await applyCheckoutDeliveryQuote(env.DB, {
-      checkoutSessionId: body.checkoutSessionId,
+      checkoutSessionId,
       customerId: session.customer_id,
-      courierId: body.courierId,
-      latitude: body.latitude,
-      longitude: body.longitude,
+      courierId,
+      latitude,
+      longitude,
     }, env.GEOAPIFY_API_KEY), { headers: { "cache-control": "private, no-store" } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "checkout_delivery_quote_failed";
     if (message === "checkout_forbidden") return jsonError(message, 403);
-    if (["checkout_session_required", "customer_required", "invalid_delivery_quote", "invalid_customer_latitude", "invalid_customer_longitude", "checkout_not_found"].includes(message)) return jsonError(message, message === "checkout_not_found" ? 404 : 400);
+    if (["checkout_session_required", "customer_required", "invalid_delivery_quote", "invalid_customer_latitude", "invalid_customer_longitude"].includes(message)) return jsonError(message, 400);
+    if (message === "checkout_not_found") return jsonError(message, 404);
     if (["default_warehouse_not_configured", "warehouse_inactive"].includes(message)) return jsonError(message, 409);
-    if (["courier_not_found"].includes(message)) return jsonError(message, 404);
+    if (message === "courier_not_found") return jsonError(message, 404);
     if (["geoapify_api_key_required", "geoapify_route_failed", "geoapify_route_invalid"].includes(message)) return jsonError(message, 502);
     return jsonError(message, 500);
   }
