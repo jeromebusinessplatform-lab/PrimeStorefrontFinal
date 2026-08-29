@@ -1,7 +1,7 @@
 # Build Status
 
 ## Current phase
-Phase 3 — Revised checkout foundation (in progress)
+Sprint 2 — Delivery engine completion (in progress)
 
 ## Authoritative architecture
 - Single PRIME deployment; no tenant model.
@@ -29,18 +29,31 @@ Phase 3 — Revised checkout foundation (in progress)
 - Taggun analysis is explicitly non-blocking for order submission.
 - Revised order workflow with server-authoritative customer modification/cancellation locks.
 - Dispatch requires a valid HTTPS tracking link; customer order actions expose TRACK only when a link is present.
+- Sprint 2 warehouse and courier configurator schema in migration 0009_delivery_configurators.sql.
+- Warehouse/courier validation and persistence service.
+- Authenticated Admin warehouse and courier management endpoints.
+- Delivery pricing changed from hard-coded rate schedules to persisted courier configuration using integer minor-unit money arithmetic.
+- Delivery configurator and fee-calculation tests added/updated.
 
 ## Validation
 - GitHub direct write path: verified.
-- Existing application source import/remix: none.
+- Sprint 2 feature branch created: feat/sprint-2-delivery-engine.
+- Delivery configuration TypeScript modules: static typecheck passed in the local verification environment.
+- Delivery migration SQL: syntax and single-default constraint validated against SQLite.
 - Full pnpm/typecheck/test/build execution: pending CI run.
 - Android APK assembly: workflow committed; successful Actions run pending.
 - Live Geoapify/Taggun calls: not performed from this repository write session.
 - Production Cloudflare mutations: not performed.
 
-## Next vertical slice
-1. Wire revised order workflow transitions into authenticated Admin and customer HTTP routes.
-2. Build the phone-first Admin Order Management card with dynamic REVIEW/MODIFY/CANCEL actions.
-3. Add mandatory Tracking Link input to the Admin DISPATCH action and customer TRACK affordance.
-4. Implement server-authoritative cart operations and checkout order creation.
-5. Build the compact Telegram checkout UI around the revised seven-step flow.
+## Sprint 2 remaining
+1. Add update/edit operations for warehouse and courier records.
+2. Integrate configured warehouse origin and selected courier pricing into checkout quote creation.
+3. Add phone-first Admin Delivery Management UI for warehouse/courier CRUD and default selection.
+4. Add end-to-end delivery quote tests covering persisted configuration, route data, and checkout integration.
+5. Run CI and correct any regression before opening/merging the PR.
+
+## Deferred launch backlog
+- Complete commerce workflow HTTP routes and UI.
+- Customer checkout UI and tracking UI.
+- Coupon and referral engines.
+- Loyalty modules (points, tiers, badges, store credit).
