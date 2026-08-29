@@ -28,8 +28,7 @@ export async function calculateRoadRoute(
   const route = json.results?.[0] ?? json.features?.[0]?.properties;
   const distanceMeters = route?.distance;
   const durationSeconds = route?.time;
-  if (!Number.isFinite(distanceMeters) || !Number.isFinite(durationSeconds) || distanceMeters <= 0 || durationSeconds <= 0) {
-    throw new Error("geoapify_route_invalid");
-  }
+  if (typeof distanceMeters !== "number" || !Number.isFinite(distanceMeters) || distanceMeters <= 0) throw new Error("geoapify_route_invalid");
+  if (typeof durationSeconds !== "number" || !Number.isFinite(durationSeconds) || durationSeconds <= 0) throw new Error("geoapify_route_invalid");
   return { distanceMeters, durationSeconds };
 }
