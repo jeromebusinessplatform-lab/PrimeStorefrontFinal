@@ -1,36 +1,34 @@
 # Build Status
 
 ## Current phase
-Phase 1 — Security, tenancy, and platform foundation (in progress)
+Phase 1 — Security and platform foundation (in progress)
 
-## Completed
-- Greenfield provenance and Cloudflare-only architecture baseline.
-- Root workspace configuration and separate Storefront/Admin/Core Service boundaries.
-- Environment placeholder template with no secret values.
-- D1 Phase 1 migration covering tenants, Telegram bots, customers/PRIME IDs, profile history, operators, sessions, and append-only audit event storage.
-- Tenant context guard and explicit cross-tenant mismatch rejection primitive.
-- Telegram Mini App initData HMAC verifier using Web Crypto; raw Telegram User ID digits are extracted before JSON parsing to avoid JavaScript number precision loss.
-- Audit event SHA-256 hash primitive for tamper-evident chaining.
+## Authoritative architecture
+- Single PRIME deployment; no tenant model.
+- Browser Admin Panel; Admin Access Code only, then server-side revocable session.
+- Telegram Mini App-only storefront; protected data requires verified Telegram initData.
+- Cloudflare is the production application/runtime/data platform; GitHub is source control and CI.
 
-## Repository checkpoints
-- `ece8f86` — Greenfield directive commit.
-- `98f202a` — greenfield Cloudflare monorepo foundation.
-- `a4af8be` — Phase 1 security and tenancy foundation.
+## Completed in repository
+- Greenfield foundation and Cloudflare service boundaries.
+- Telegram initData HMAC verifier with lossless Telegram User ID handling.
+- Audit hash primitive.
+- Forward migration `0002_single_instance_admin.sql` removing the obsolete tenant/operator foundation and creating single-instance security tables.
+- Admin access-code verifier/session-cookie primitives.
+- Explicit storefront Telegram identity guard.
+- GitHub Actions CI workflow for install, typecheck, tests, and build.
+- Architecture override ADR.
+- Focused admin access-code tests.
 
 ## Validation
-- Repository write path: verified; direct Git object/tree/commit/ref update succeeded.
-- Automated TypeScript/test/build execution: NOT YET RUN inside a connected repository execution environment.
-- Production Cloudflare mutations: intentionally not performed.
+- GitHub direct write path: verified.
 - Existing application source import/remix: none.
-
-## Gate status
-Phase 0 gate: NOT PASSED until a real install + baseline build/test run is executed.
-Phase 1 gate: IN PROGRESS; auth/session/RBAC/audit tests and complete operator/admin security flow remain.
+- Full pnpm/typecheck/test/build execution: pending CI run.
+- Production Cloudflare mutations: not performed.
 
 ## Next vertical slice
-Complete Phase 1 security controls:
-1. Session cookie/CSRF/revocation primitives.
-2. Telegram webhook secret verification + update deduplication contract.
-3. PRIME Member ID generator and idempotent enrollment service.
-4. Admin bootstrap-code normalization/verifier contract and RBAC permission matrix.
-5. Focused security tests and request/redaction framework.
+1. Wire Admin access-code verification and persistent sessions into Core Service routes.
+2. Wire Telegram webhook secret verification and D1 update deduplication.
+3. Implement idempotent customer enrollment and immutable PRIME Member ID assignment.
+4. Add storefront Telegram exchange/session flow and browser blocking shell behavior.
+5. Add focused security tests, then begin catalog/commerce schema.
