@@ -34,11 +34,15 @@ Sprint 2 — Delivery engine completion (in progress)
 - Authenticated Admin warehouse and courier management endpoints.
 - Delivery pricing changed from hard-coded rate schedules to persisted courier configuration using integer minor-unit money arithmetic.
 - Delivery configurator and fee-calculation tests added/updated.
+- Warehouse and courier PATCH/edit operations.
+- Server-authoritative delivery quote service using the active default warehouse, selected active courier, Geoapify road routing, and persisted pricing configuration.
+- Authenticated Admin delivery quote endpoint.
+- Phone-first Admin Delivery Management UI for warehouse/courier listing, create, edit, and default selection.
 
 ## Validation
 - GitHub direct write path: verified.
 - Sprint 2 feature branch created: feat/sprint-2-delivery-engine.
-- Delivery configuration TypeScript modules: static typecheck passed in the local verification environment.
+- Delivery configuration TypeScript modules: statically typechecked in the local verification environment.
 - Delivery migration SQL: syntax and single-default constraint validated against SQLite.
 - Full pnpm/typecheck/test/build execution: pending CI run.
 - Android APK assembly: workflow committed; successful Actions run pending.
@@ -46,11 +50,9 @@ Sprint 2 — Delivery engine completion (in progress)
 - Production Cloudflare mutations: not performed.
 
 ## Sprint 2 remaining
-1. Add update/edit operations for warehouse and courier records.
-2. Integrate configured warehouse origin and selected courier pricing into checkout quote creation.
-3. Add phone-first Admin Delivery Management UI for warehouse/courier CRUD and default selection.
-4. Add end-to-end delivery quote tests covering persisted configuration, route data, and checkout integration.
-5. Run CI and correct any regression before opening/merging the PR.
+1. Integrate the delivery quote service into customer checkout quote creation so the persisted warehouse/courier configuration is consumed by the final order quote.
+2. Add end-to-end delivery quote tests covering persisted configuration, Geoapify route data, and checkout integration.
+3. Run CI, fix regressions, and complete PR review/merge.
 
 ## Deferred launch backlog
 - Complete commerce workflow HTTP routes and UI.
