@@ -1,7 +1,7 @@
 # Build Status
 
 ## Current phase
-Phase 1 — Security and platform foundation (in progress)
+Phase 2 — Commerce foundation (in progress)
 
 ## Authoritative architecture
 - Single PRIME deployment; no tenant model.
@@ -13,12 +13,15 @@ Phase 1 — Security and platform foundation (in progress)
 - Greenfield foundation and Cloudflare service boundaries.
 - Telegram initData HMAC verifier with lossless Telegram User ID handling.
 - Audit hash primitive.
-- Forward migration `0002_single_instance_admin.sql` removing the obsolete tenant/operator foundation and creating single-instance security tables.
+- Single-instance forward migration removing the obsolete tenant/operator foundation and creating platform/admin/deduplication tables.
 - Admin access-code verifier/session-cookie primitives.
 - Explicit storefront Telegram identity guard.
 - GitHub Actions CI workflow for install, typecheck, tests, and build.
-- Architecture override ADR.
-- Focused admin access-code tests.
+- Immutable PRIME Member ID generator/validator.
+- Telegram webhook secret/update-id boundary and focused coverage.
+- Obsolete tenant-context source module removed.
+- Commerce catalog/inventory D1 schema for categories, products, product images, inventory, and movement ledger.
+- Shared commerce contracts and server-side available-inventory guard.
 
 ## Validation
 - GitHub direct write path: verified.
@@ -27,8 +30,8 @@ Phase 1 — Security and platform foundation (in progress)
 - Production Cloudflare mutations: not performed.
 
 ## Next vertical slice
-1. Wire Admin access-code verification and persistent sessions into Core Service routes.
-2. Wire Telegram webhook secret verification and D1 update deduplication.
-3. Implement idempotent customer enrollment and immutable PRIME Member ID assignment.
-4. Add storefront Telegram exchange/session flow and browser blocking shell behavior.
-5. Add focused security tests, then begin catalog/commerce schema.
+1. Add customer enrollment service backed by D1 and idempotent Telegram identity keys.
+2. Wire Admin access-code verification/session lifecycle into Core Service HTTP routes.
+3. Wire Telegram webhook ingestion and deduplication into Core Service routes.
+4. Expose authenticated catalog reads through the Storefront boundary and Admin catalog mutation endpoints.
+5. Add cart schema and server-authoritative cart operations, then move into checkout/order state.
