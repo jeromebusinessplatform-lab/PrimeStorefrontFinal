@@ -1,9 +1,9 @@
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-export const PRIME_MEMBER_ID_LENGTH = 10;
+export const PRIME_MEMBER_ID_LENGTH = 12;
 
 export function generatePrimeMemberId(): string {
   const result: string[] = [];
-  const bytes = new Uint8Array(16);
+  const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
 
   let index = 0;
