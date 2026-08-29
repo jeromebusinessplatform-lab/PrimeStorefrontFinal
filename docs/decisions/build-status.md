@@ -27,6 +27,8 @@ Phase 3 — Revised checkout foundation (in progress)
 - Cart and order foundation.
 - Revised checkout state model with receiver details, Geoapify address selection, delivery provider/payment method, payment receipt storage, and independent Taggun analysis state.
 - Taggun analysis is explicitly non-blocking for order submission.
+- Revised order workflow with server-authoritative customer modification/cancellation locks.
+- Dispatch requires a valid HTTPS tracking link; customer order actions expose TRACK only when a link is present.
 
 ## Validation
 - GitHub direct write path: verified.
@@ -37,8 +39,8 @@ Phase 3 — Revised checkout foundation (in progress)
 - Production Cloudflare mutations: not performed.
 
 ## Next vertical slice
-1. Implement server-authoritative cart operations with inventory reservation checks.
-2. Implement checkout quote/review API and order creation using the revised flow.
-3. Persist receipt upload metadata and enqueue non-blocking Taggun analysis.
-4. Add Geoapify autocomplete HTTP boundary for the Telegram storefront.
-5. Build the compact phone-first Storefront checkout UI and stacked Admin payment/order review UI.
+1. Wire revised order workflow transitions into authenticated Admin and customer HTTP routes.
+2. Build the phone-first Admin Order Management card with dynamic REVIEW/MODIFY/CANCEL actions.
+3. Add mandatory Tracking Link input to the Admin DISPATCH action and customer TRACK affordance.
+4. Implement server-authoritative cart operations and checkout order creation.
+5. Build the compact Telegram checkout UI around the revised seven-step flow.
