@@ -1,6 +1,7 @@
 import { verifyTelegramInitData } from "./telegram-init-data";
 import { enrollCustomer } from "../identity/customer-enrollment";
 import { generatePrimeMemberId } from "../identity/prime-member-id";
+import { createCustomerSession, CUSTOMER_SESSION_ABSOLUTE_SECONDS } from "../identity/customer-session";
 
 interface ExchangeEnv {
   DB: Parameters<typeof enrollCustomer>[0];
@@ -9,7 +10,7 @@ interface ExchangeEnv {
 }
 
 export async function handleTelegramCustomerExchange(request: Request, env: ExchangeEnv): Promise<Response> {
-  if (request.method !== "POST") return new Response(null, { status: 405 });
+  if (request.method !== "POST") return new Response(null, { status: 405, headers: { allow: "POST" } });
   if (!(request.headers.get("content-type") ?? "").toLowerCase().includes("application/json")) {
     return Response.json({ error: "json_required" }, { status: 415, headers: { "cache-control": "no-store" } });
   }
@@ -40,8 +41,9 @@ export async function handleTelegramCustomerExchange(request: Request, env: Exch
       source: "mini_app_exchange",
       requestId: request.headers.get("x-request-id") ?? undefined,
     }, generatePrimeMemberId);
-    return Response.json({ ok: true, customerId: enrollment.customerId, primeMemberId: enrollment.primeMemberId, created: enrollment.created }, {
-      headers: { "cache-control": "private, no-store" },
+    const session = await createCustomerSession(env.DB, enrollment.customerId);
+    return Response.json({ ok: true, primeMemberId: enrollment.primeMemberId, created: enrollment.created, expiresIn: CUSTOMER_SESSION_ABSOLUTE_SECONDS }, {
+      headers: { "cache-control": "private, no-store", "set-cookie": session.cookie },
     });
   } catch (error) {
     const code = error instanceof Error ? error.message : "enrollment_failed";
