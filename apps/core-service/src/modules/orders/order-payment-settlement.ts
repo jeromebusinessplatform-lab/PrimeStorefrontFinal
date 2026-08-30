@@ -111,25 +111,35 @@ export async function settlePayment(
   if (!existing) {
     statements.push(
       db
-        .prepare("INSERT INTO loyalty_accounts (customer_id, points_balance, lifetime_points, store_credit_minor, tier, updated_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(customer_id) DO UPDATE SET points_balance = excluded.points_balance, lifetime_points = excluded.lifetime_points, tier = excluded.tier, updated_at = excluded.updated_at")
-        .bind(
-          order.customer_id,
-          loyalty.account.pointsBalance,
-          loyalty.account.lifetimePoints,
-          loyalty.account.storeCreditMinor,
-          loyalty.account.tier,
-          now.toISOString(),
-        ),
-    );
-    statements.push(
-      db
         .prepare("INSERT INTO loyalty_transactions (id, customer_id, kind, points_delta, credit_delta_minor, reference_type, reference_id, created_at) VALUES (?, ?, 'earn', ?, 0, 'order_payment', ?, ?)")
         .bind(crypto.randomUUID(), order.customer_id, loyalty.earnedPoints, order.id, now.toISOString()),
+      db
+        .prepare("INSERT INTO loyalty_accounts (customer_id, points_balance, lifetime_points, store_credit_minor, tier, updated_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(customer_id) DO UPDATE SET points_balance = loyalty_accounts.points_balance + excluded.points_balance, lifetime_points = loyalty_accounts.lifetime_points + excluded.lifetime_points, tier = CASE WHEN loyalty_accounts.lifetime_points + excluded.lifetime_points >= ? THEN 'platinum' WHEN loyalty_accounts.lifetime_points + excluded.lifetime_points >= ? THEN 'gold' WHEN loyalty_accounts.lifetime_points + excluded.lifetime_points >= ? THEN 'silver' ELSE 'member' END, updated_at = excluded.updated_at")
+        .bind(
+          order.customer_id,
+          loyalty.earnedPoints,
+          loyalty.earnedPoints,
+          0,
+          account.tier,
+          now.toISOString(),
+          config.tierThresholds.platinum,
+          config.tierThresholds.gold,
+          config.tierThresholds.silver,
+        ),
     );
   }
 
-  const results = await db.batch(statements);
-  if (results.some((result) => !result.success)) throw new Error("payment_settlement_failed");
+  try {
+    const results = await db.batch(statements);
+    if (results.some((result) => !result.success)) throw new Error("payment_settlement_failed");
+  } catch (error) {
+    const settled = await db
+      .prepare("SELECT id FROM loyalty_transactions WHERE customer_id = ? AND reference_type = 'order_payment' AND reference_id = ? AND kind = 'earn' LIMIT 1")
+      .bind(order.customer_id, order.id)
+      .first<{ id: string }>();
+    if (settled) return { orderId: order.id, state: "PAYMENT_CLEARED", awardedPoints: 0 };
+    throw error;
+  }
 
   return {
     orderId: order.id,
