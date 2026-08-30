@@ -1,11 +1,8 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 import { handleAdminPaymentSettlement } from "./admin-payment-settlement";
 
-const originalCrypto = globalThis.crypto;
-
 afterEach(() => {
   vi.restoreAllMocks();
-  globalThis.crypto = originalCrypto;
 });
 
 function dbFor(workflowState: string = "REVIEW") {
