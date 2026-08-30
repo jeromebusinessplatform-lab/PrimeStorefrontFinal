@@ -6,7 +6,6 @@ import { createCustomerSession, CUSTOMER_SESSION_ABSOLUTE_SECONDS } from "../ide
 interface ExchangeEnv {
   DB: Parameters<typeof enrollCustomer>[0];
   TELEGRAM_BOT_TOKEN: string;
-  TELEGRAM_BOT_ID: string;
 }
 
 export async function handleTelegramCustomerExchange(request: Request, env: ExchangeEnv): Promise<Response> {
@@ -37,7 +36,6 @@ export async function handleTelegramCustomerExchange(request: Request, env: Exch
       firstName: verified.user.first_name,
       lastName: verified.user.last_name,
       username: verified.user.username,
-      botId: env.TELEGRAM_BOT_ID,
       source: "mini_app_exchange",
       requestId: request.headers.get("x-request-id") ?? undefined,
     }, generatePrimeMemberId);
