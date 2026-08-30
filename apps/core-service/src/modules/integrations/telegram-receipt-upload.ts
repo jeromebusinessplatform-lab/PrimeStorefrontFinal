@@ -11,6 +11,7 @@ export interface TelegramReceiptUploadInput {
   customerId: string;
   file: File;
   botToken: string;
+  taggunApiKey?: string;
   fetchImpl?: typeof fetch;
   now?: Date;
 }
@@ -86,7 +87,6 @@ export async function uploadReceiptToTelegram(
   }
   if (!fileInfo.file_path) throw new Error("telegram_file_path_missing");
 
-  let receipt: { receiptId: string; objectKey: string };
   const nowIso = (input.now ?? new Date()).toISOString();
   const receiptId = crypto.randomUUID();
   const extension = input.file.type === "application/pdf" ? "pdf" : input.file.type.split("/")[1] ?? "bin";
@@ -94,14 +94,13 @@ export async function uploadReceiptToTelegram(
   await db.prepare(
     "INSERT INTO payment_receipts (id, checkout_session_id, object_key, media_type, size_bytes, taggun_status, uploaded_at) VALUES (?, ?, ?, ?, ?, 'pending', ?)",
   ).bind(receiptId, input.checkoutSessionId, objectKey, input.file.type, input.file.size, nowIso).run();
-  receipt = { receiptId, objectKey };
 
   let taggun: TaggunAnalysis = { status: "failed" };
   try {
     const downloadResponse = await fetchImpl(`https://api.telegram.org/file/bot${input.botToken}/${fileInfo.file_path}`);
     if (downloadResponse.ok) {
       const blob = await downloadResponse.blob();
-      taggun = await analyzeReceiptWithTaggun(blob, "");
+      taggun = await analyzeReceiptWithTaggun(blob, input.taggunApiKey ?? "");
     }
   } catch {
     taggun = { status: "failed" };
@@ -109,7 +108,7 @@ export async function uploadReceiptToTelegram(
 
   await db.prepare(
     "UPDATE payment_receipts SET taggun_status = ?, taggun_result = ?, analyzed_at = ? WHERE id = ?",
-  ).bind(taggun.status, JSON.stringify(taggun), new Date().toISOString(), receipt.receiptId).run();
+  ).bind(taggun.status, JSON.stringify(taggun), new Date().toISOString(), receiptId).run();
 
   try { await telegramJson(input.botToken, "deleteMessage", { chat_id: customer.telegram_user_id, message_id: messageId }, fetchImpl); } catch { /* best effort cleanup */ }
 
