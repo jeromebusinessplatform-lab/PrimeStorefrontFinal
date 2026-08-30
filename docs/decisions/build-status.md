@@ -1,7 +1,7 @@
 # Build Status
 
 ## Current phase
-Sprint 3 — commerce workflow implementation in progress; integration/E2E and CI closeout remain
+Launch hardening after Sprint 3 settlement closeout
 
 ## Authoritative architecture
 - Single PRIME deployment; no tenant model.
@@ -20,7 +20,7 @@ Sprint 3 — commerce workflow implementation in progress; integration/E2E and C
 - Telegram-only storefront identity guard.
 - GitHub Actions CI workflow for install, typecheck, tests, and build.
 - Admin Android WebView shell and APK CI pipeline.
-- Immutable ten-character PRIME Member ID generator/validator.
+- Immutable PRIME Member ID generator/validator.
 - Idempotent customer enrollment and Telegram-to-customer exchange foundation.
 - Revocable customer sessions and Admin session lifecycle foundation.
 - Commerce catalog/inventory schema and contracts.
@@ -29,39 +29,35 @@ Sprint 3 — commerce workflow implementation in progress; integration/E2E and C
 - Taggun analysis is explicitly non-blocking for order submission.
 - Revised order workflow with server-authoritative customer modification/cancellation locks.
 - Dispatch requires a valid HTTPS tracking link; customer order actions expose TRACK only when a link is present.
-- Sprint 2 warehouse and courier configurator schema in migration 0009_delivery_configurators.sql.
-- Warehouse/courier validation, persistence, update, default selection, and deactivation services.
-- Authenticated Admin warehouse and courier management endpoints.
+- Sprint 2 warehouse and courier configurator schema and services.
 - Delivery pricing uses persisted courier configuration and integer minor-unit money arithmetic instead of hard-coded rate schedules.
-- Checkout delivery quote integration resolves the persisted default warehouse, active courier, Geoapify road route, and configured fee, and persists the quote/version/expiry on the checkout session.
-- Authenticated customer ownership is enforced for checkout delivery-quote mutations.
-- Phone-first Admin Delivery Management UI for warehouse and courier create/edit/default operations.
-- Delivery configuration, fee calculation, and checkout integration tests.
-- CI workflow fixed for repositories without a committed pnpm lockfile and for the current workspace TypeScript/React/Cloudflare typings.
-- Workflow coverage enforces HTTPS tracking links during dispatch.
-
-## Sprint 3 implementation in progress
-- Commerce workflow composition now reuses the existing order transition contract and server-authoritative tracking requirement.
-- Coupon engine supports fixed/percentage discounts, minimum subtotal, usage limits, validity windows, maximum discounts, normalization, and integer minor-unit arithmetic.
-- Referral engine supports code normalization, self-referral rejection, qualification thresholds, and qualification-to-reward state progression.
-- Loyalty engine supports points earning/redemption, lifetime points, tier thresholds, and store-credit conversion with safe integer validation.
-- Sprint 3 persistence migration 0011_promotions_referrals_loyalty.sql adds coupons, redemptions, referrals, loyalty accounts, and loyalty transactions.
-- Focused Sprint 3 tests cover checkout quote composition, tracking dispatch enforcement, coupons, referral qualification/reward, and loyalty accrual/tiering.
+- Checkout delivery quote integration resolves the persisted default warehouse, active courier, Geoapify road route, and configured fee, and persists quote/version/expiry.
+- Coupon engine with fixed/percentage discounts, minimum subtotal, usage limits, validity windows, maximum discounts, normalization, and integer arithmetic.
+- Referral engine with code normalization, self-referral rejection, qualification thresholds, and reward-state progression.
+- Loyalty engine with points earning/redemption, lifetime points, tiers, and store-credit conversion.
+- Sprint 3 persistence for coupons, redemptions, referrals, loyalty accounts, and loyalty transactions.
+- Paid-order settlement with loyalty accrual, tier recalculation, atomic persistence, and database-backed idempotency.
+- Referral rewards settled after payment clearance with duplicate-reward protection.
+- Payment-settlement integration regression coverage.
+- Telegram fallback receipt-storage service exists for launch when R2 is unavailable; R2 remains the preferred backend.
 
 ## Validation
 - GitHub direct write path: verified.
-- Sprint 2 feature branch: feat/sprint-2-delivery-engine.
-- Full CI for Sprint 2 completed successfully on the feature branch: dependency installation, TypeScript typecheck, all tests, and build passed.
-- Sprint 3 branch: feat/sprint-3-commerce-workflow.
-- Sprint 3 CI/typecheck/test/build validation is pending on the current branch and is required before closeout.
+- Sprint 3 closeout PR #8 merged into main.
+- Sprint 3 closeout CI #261: full typecheck, tests, and build passed.
+- Main settlement integration CI #268: full typecheck, tests, and build passed.
+- Current main CI for Telegram fallback receipt test: running.
 - Live Geoapify/Taggun calls: not performed from this repository write session.
 - Production Cloudflare mutations: not performed.
 
-## Sprint 3 closeout gate
-Sprint 3 is **not complete yet**. Remaining gate: wire the new promotion/referral/loyalty capabilities into persisted checkout/order paths, add integration/E2E coverage across the full workflow, run full CI, remediate regressions, and then record the verified Sprint 3 closeout.
-
 ## Remaining launch backlog
-1. Complete Sprint 3 HTTP routes/UI integration for commerce workflow and customer checkout/tracking.
-2. Persist and apply coupon/referral/loyalty effects in checkout/order transactions.
-3. Integration/E2E validation and full CI closeout.
-4. Production Cloudflare configuration, secrets, domain bindings, and end-to-end live validation.
+1. Wire the Admin payment-confirmation route into the Worker entrypoint; the settlement service is currently in the core module layer but not exposed by the current `index.ts` routing.
+2. Wire the Telegram receipt fallback into the Worker upload route so missing R2 no longer blocks mandatory receipt submission.
+3. Complete customer-facing order detail/tracking route/UI coverage and verify TRACK behavior end-to-end.
+4. Finish integration/E2E coverage across checkout → receipt → payment clearance → loyalty/referral/store-credit → order workflow.
+5. Resolve/rebase the stale Sprint 4 payment-proof PR (#2) before using it as a production dependency.
+6. Configure production Cloudflare bindings/secrets/domain and perform live Geoapify, Taggun, Telegram, D1, and receipt-storage validation.
+7. Generate and verify the Admin APK release artifact.
+
+## Release gate
+The application is **not yet declared production-ready**. CI is green for the latest completed main validation, but the receipt fallback and Admin payment-action routing still need to be connected to the live Worker path, followed by end-to-end production validation.
