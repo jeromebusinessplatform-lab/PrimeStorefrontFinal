@@ -1,5 +1,4 @@
 export interface AuditEventInput {
-  tenantId: string;
   actorType: "customer" | "operator" | "system";
   actorId?: string;
   action: string;
@@ -13,7 +12,6 @@ export interface AuditEventInput {
 
 export async function hashAuditEvent(input: AuditEventInput): Promise<string> {
   const canonical = JSON.stringify({
-    tenantId: input.tenantId,
     actorType: input.actorType,
     actorId: input.actorId ?? null,
     action: input.action,
