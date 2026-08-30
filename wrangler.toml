@@ -1,12 +1,12 @@
 name = "prime-core-service"
-main = "apps/core-service/src/index.ts"
+main = "apps/core-service/src/worker.ts"
 compatibility_date = "2026-08-29"
 
 [vars]
 APP_ENV = "local"
 
-# Resource IDs/names are environment-specific and must be supplied in staging/production.
-# Secrets are never committed here.
+# R2 is intentionally optional for the temporary Telegram receipt-storage launch mode.
+# Re-add the OBJECTS R2 bindings once the account bucket is provisioned.
 
 [env.staging]
 name = "prime-core-service-staging"

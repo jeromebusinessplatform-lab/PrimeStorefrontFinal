@@ -8,6 +8,8 @@ import type { CourierType } from "./modules/delivery/delivery-config";
 import { submitCheckout } from "./modules/checkout/checkout-submit";
 import { createProduct, listProducts, type ProductBadge } from "./modules/catalog/catalog-store";
 import { getLoyaltyConfiguration, updateLoyaltyConfiguration, type LoyaltyConfiguration } from "./modules/loyalty/loyalty-config-store";
+import { handleCustomerCatalog, handleCustomerCouriers } from "./modules/storefront/storefront-routes";
+import { uploadReceiptToR2 } from "./modules/integrations/receipt-upload";
 
 export interface Env {
   APP_ENV: string;
@@ -20,8 +22,8 @@ export interface Env {
   JOBS?: Queue;
   ADMIN_ACCESS_CODE_VERIFIER?: string;
   TELEGRAM_BOT_TOKEN?: string;
-  TELEGRAM_BOT_ID?: string;
   GEOAPIFY_API_KEY?: string;
+  TAGGUN_API_KEY?: string;
 }
 
 function jsonError(error: string, status: number): Response { return Response.json({ error }, { status, headers: { "cache-control": "no-store" } }); }
@@ -206,6 +208,28 @@ async function handleCustomerCheckout(request: Request, env: Env): Promise<Respo
   }
 }
 
+async function handleCustomerReceiptUpload(request: Request, env: Env): Promise<Response> {
+  if (!env.DB) return jsonError("database_unavailable", 503);
+  const session = await validateCustomerSession(env.DB, request);
+  if (!session) return jsonError("telegram_session_required", 401);
+  if (!env.OBJECTS) return jsonError("r2_not_configured", 503);
+  if (!(request.headers.get("content-type") ?? "").toLowerCase().includes("multipart/form-data")) return jsonError("multipart_required", 415);
+  try {
+    const form = await request.formData();
+    const checkoutSessionId = form.get("checkoutSessionId");
+    const file = form.get("file");
+    if (typeof checkoutSessionId !== "string" || !checkoutSessionId.trim()) return jsonError("checkout_session_required", 400);
+    if (!(file instanceof File)) return jsonError("receipt_file_required", 400);
+    const result = await uploadReceiptToR2(env.DB, env.OBJECTS, { checkoutSessionId, customerId: session.customer_id, file }, env.TAGGUN_API_KEY);
+    return Response.json({ ok: true, receiptId: result.receiptId, objectKey: result.objectKey, taggun: result.taggun }, { status: 201, headers: { "cache-control": "private, no-store" } });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "receipt_upload_failed";
+    if (["checkout_session_required", "customer_required", "receipt_file_required", "receipt_file_too_large", "receipt_file_type_invalid"].includes(message)) return jsonError(message, 400);
+    if (message === "checkout_not_found") return jsonError(message, 404);
+    return jsonError(message, 500);
+  }
+}
+
 async function handleCustomerCheckoutSubmit(request: Request, env: Env): Promise<Response> {
   if (!env.DB) return jsonError("database_unavailable", 503);
   const session = await validateCustomerSession(env.DB, request);
@@ -240,9 +264,12 @@ export default {
     if (url.pathname.startsWith("/admin/catalog/")) return handleAdminCatalog(request, env);
     if (url.pathname.startsWith("/admin/loyalty/")) return handleAdminLoyalty(request, env);
     if (url.pathname === "/customer/auth/exchange") {
-      if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_BOT_ID) return jsonError("telegram_auth_not_configured", 503);
-      return handleTelegramCustomerExchange(request, { DB: env.DB, TELEGRAM_BOT_TOKEN: env.TELEGRAM_BOT_TOKEN, TELEGRAM_BOT_ID: env.TELEGRAM_BOT_ID });
+      if (!env.TELEGRAM_BOT_TOKEN) return jsonError("telegram_auth_not_configured", 503);
+      return handleTelegramCustomerExchange(request, { DB: env.DB, TELEGRAM_BOT_TOKEN: env.TELEGRAM_BOT_TOKEN });
     }
+    if (url.pathname === "/customer/catalog/products" && request.method === "GET") return handleCustomerCatalog(request, env.DB);
+    if (url.pathname === "/customer/catalog/receipt" && request.method === "POST") return handleCustomerReceiptUpload(request, env);
+    if (url.pathname === "/customer/delivery/couriers" && request.method === "GET") return handleCustomerCouriers(request, env.DB);
     if (url.pathname === "/customer/checkout/delivery-quote" && request.method === "POST") return handleCustomerCheckout(request, env);
     if (url.pathname === "/customer/checkout/submit" && request.method === "POST") return handleCustomerCheckoutSubmit(request, env);
     if (url.pathname === "/admin/auth/login") {

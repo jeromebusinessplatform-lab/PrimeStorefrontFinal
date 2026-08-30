@@ -67,14 +67,20 @@ export async function applyCheckoutDeliveryQuote(
   if (!input.customerId.trim()) throw new Error("customer_required");
   if (!Number.isFinite(input.latitude) || input.latitude < -90 || input.latitude > 90) throw new Error("invalid_customer_latitude");
   if (!Number.isFinite(input.longitude) || input.longitude < -180 || input.longitude > 180) throw new Error("invalid_customer_longitude");
-  const checkout = await db.prepare(
+  const now = input.now ?? new Date();
+  let checkout = await db.prepare(
     "SELECT id, customer_id, delivery_quote_version FROM checkout_sessions WHERE id = ? AND status != 'expired' LIMIT 1",
   ).bind(input.checkoutSessionId).first<{ id: string; customer_id: string; delivery_quote_version: number | null }>();
-  if (!checkout) throw new Error("checkout_not_found");
+  if (!checkout) {
+    const expiresAt = new Date(now.getTime() + 30 * 60 * 1000).toISOString();
+    await db.prepare(
+      "INSERT INTO checkout_sessions (id, customer_id, status, created_at, updated_at, expires_at) VALUES (?, ?, 'delivery_selection', ?, ?, ?)",
+    ).bind(input.checkoutSessionId, input.customerId, now.toISOString(), now.toISOString(), expiresAt).run();
+    checkout = { id: input.checkoutSessionId, customer_id: input.customerId, delivery_quote_version: 0 };
+  }
   if (checkout.customer_id !== input.customerId) throw new Error("checkout_forbidden");
 
   const quote = await createDeliveryQuote(db, { courierId: input.courierId, latitude: input.latitude, longitude: input.longitude }, geoapifyApiKey);
-  const now = input.now ?? new Date();
   const quoteVersion = (checkout.delivery_quote_version ?? 0) + 1;
   const expiresAt = new Date(now.getTime() + 15 * 60 * 1000).toISOString();
   await db.prepare(
