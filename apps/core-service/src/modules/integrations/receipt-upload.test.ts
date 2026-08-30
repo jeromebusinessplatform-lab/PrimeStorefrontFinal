@@ -6,8 +6,10 @@ function fakeDb() {
   return {
     calls,
     prepare(sql: string) {
+      calls.push({ sql, values: [] });
       return {
         bind(...values: unknown[]) {
+          calls[calls.length - 1].values = values;
           return {
             async first<T>() {
               if (sql.startsWith("SELECT id FROM checkout_sessions")) return { id: "checkout-1" } as T;
