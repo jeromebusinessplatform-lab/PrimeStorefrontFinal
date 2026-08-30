@@ -10,7 +10,6 @@ interface D1PreparedStatementLike {
 
 interface D1ResultLike {
   success: boolean;
-  meta?: { changes?: number };
 }
 
 interface D1Like {
@@ -164,10 +163,9 @@ export async function submitCheckout(db: D1Like, input: CheckoutSubmissionInput)
   if (!safeNonNegativeInteger(requestedStoreCredit)) throw new Error("store_credit_invalid");
   const maxStoreCredit = subtotalMinor - discountMinor;
   const storeCreditMinor = Math.min(requestedStoreCredit, maxStoreCredit);
-  let currentStoreCredit = 0;
   if (storeCreditMinor > 0) {
     const account = await db.prepare("SELECT store_credit_minor FROM loyalty_accounts WHERE customer_id = ? LIMIT 1").bind(input.customerId).first<{ store_credit_minor: number }>();
-    currentStoreCredit = account?.store_credit_minor ?? 0;
+    const currentStoreCredit = account?.store_credit_minor ?? 0;
     if (!safeNonNegativeInteger(currentStoreCredit) || storeCreditMinor > currentStoreCredit) throw new Error("insufficient_store_credit");
   }
 
@@ -189,48 +187,43 @@ export async function submitCheckout(db: D1Like, input: CheckoutSubmissionInput)
   const orderNumber = generateOrderNumber(now);
   const paymentMethod = checkout.delivery_fee_payment_method as CheckoutPaymentMethod;
   const legacyStatus = paymentMethod === "PAY_NOW" ? "payment_review" : "pending_payment";
-  const orderEventId = crypto.randomUUID();
-  const workflowEventId = crypto.randomUUID();
-  const checkoutEventId = crypto.randomUUID();
+  const nowIso = now.toISOString();
   const receipt = await db.prepare("SELECT id FROM payment_receipts WHERE checkout_session_id = ? AND order_id IS NULL ORDER BY uploaded_at DESC LIMIT 1").bind(checkout.id).first<ReceiptRow>();
 
   const statements: D1PreparedStatementLike[] = [
     db.prepare("INSERT INTO orders (id, customer_id, status, currency, subtotal_minor, delivery_fee_minor, discount_minor, total_minor, created_at, updated_at, workflow_state, order_number, receiver_name, receiver_contact, delivery_address_text, delivery_formatted_address, delivery_lat, delivery_lon, delivery_provider, delivery_fee_payment_method, coupon_code, referral_code, store_credit_minor, loyalty_points_redeemed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'REVIEW', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)").bind(
       orderId, input.customerId, legacyStatus, checkout.delivery_fee_currency.toUpperCase(), subtotalMinor, checkout.delivery_fee_amount, discountMinor, totalMinor,
-      now.toISOString(), now.toISOString(), orderNumber, receiver.name, receiver.contactNumber, receiver.addressText, receiver.formattedAddress ?? null,
+      nowIso, nowIso, orderNumber, receiver.name, receiver.contactNumber, receiver.addressText, receiver.formattedAddress ?? null,
       receiver.latitude ?? null, receiver.longitude ?? null, checkout.delivery_provider, paymentMethod, normalizedCouponCode ?? null, normalizedReferralCode ?? null, storeCreditMinor,
     ),
     ...cart.results.map((item) => db.prepare("INSERT INTO order_items (id, order_id, product_id, quantity, unit_price_minor, line_total_minor, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)").bind(
-      crypto.randomUUID(), orderId, item.product_id, item.quantity, item.unit_price_minor, item.quantity * item.unit_price_minor, now.toISOString(),
+      crypto.randomUUID(), orderId, item.product_id, item.quantity, item.unit_price_minor, item.quantity * item.unit_price_minor, nowIso,
     )),
-    db.prepare("INSERT INTO order_events (id, order_id, event_type, from_status, to_status, occurred_at, actor_type, actor_id, payload_redacted) VALUES (?, ?, 'ORDER_SUBMITTED', NULL, 'REVIEW', ?, 'customer', ?, ?)").bind(orderEventId, orderId, now.toISOString(), input.customerId, JSON.stringify({ paymentMethod, couponCode: normalizedCouponCode ?? null, referralCode: normalizedReferralCode ?? null })),
-    db.prepare("INSERT INTO order_workflow_events (id, order_id, action, from_state, to_state, actor_type, actor_id, occurred_at, payload_redacted) VALUES (?, ?, 'SUBMIT_ORDER', NULL, 'REVIEW', 'customer', ?, ?, ?)").bind(workflowEventId, orderId, input.customerId, now.toISOString(), JSON.stringify({ paymentMethod })),
-    db.prepare("INSERT INTO checkout_events (id, checkout_session_id, event_type, payload_redacted, occurred_at) VALUES (?, ?, 'ORDER_SUBMITTED', ?, ?)").bind(checkoutEventId, checkout.id, JSON.stringify({ orderId, orderNumber, totalMinor }), now.toISOString()),
-    db.prepare("UPDATE checkout_sessions SET status = 'submitted', updated_at = ? WHERE id = ? AND customer_id = ? AND status != 'submitted'").bind(now.toISOString(), checkout.id, input.customerId),
-    db.prepare("UPDATE carts SET status = 'converted', updated_at = ? WHERE id = ? AND customer_id = ? AND status = 'active'").bind(now.toISOString(), cart.results[0].cart_id, input.customerId),
+    db.prepare("INSERT INTO order_events (id, order_id, event_type, from_status, to_status, occurred_at, actor_type, actor_id, payload_redacted) VALUES (?, ?, 'ORDER_SUBMITTED', NULL, 'REVIEW', ?, 'customer', ?, ?)").bind(crypto.randomUUID(), orderId, nowIso, input.customerId, JSON.stringify({ paymentMethod, couponCode: normalizedCouponCode ?? null, referralCode: normalizedReferralCode ?? null })),
+    db.prepare("INSERT INTO order_workflow_events (id, order_id, action, from_state, to_state, actor_type, actor_id, occurred_at, payload_redacted) VALUES (?, ?, 'SUBMIT_ORDER', NULL, 'REVIEW', 'customer', ?, ?, ?)").bind(crypto.randomUUID(), orderId, input.customerId, nowIso, JSON.stringify({ paymentMethod })),
+    db.prepare("INSERT INTO checkout_events (id, checkout_session_id, event_type, payload_redacted, occurred_at) VALUES (?, ?, 'ORDER_SUBMITTED', ?, ?)").bind(crypto.randomUUID(), checkout.id, JSON.stringify({ orderId, orderNumber, totalMinor }), nowIso),
+    db.prepare("UPDATE checkout_sessions SET status = 'submitted', updated_at = ? WHERE id = ? AND customer_id = ? AND status != 'submitted'").bind(nowIso, checkout.id, input.customerId),
+    db.prepare("UPDATE carts SET status = 'converted', updated_at = ? WHERE id = ? AND customer_id = ? AND status = 'active'").bind(nowIso, cart.results[0].cart_id, input.customerId),
   ];
 
   if (receipt) statements.push(db.prepare("UPDATE payment_receipts SET order_id = ? WHERE id = ? AND checkout_session_id = ? AND order_id IS NULL").bind(orderId, receipt.id, checkout.id));
   if (coupon) {
-    statements.push(db.prepare("UPDATE coupons SET usage_count = usage_count + 1, updated_at = ? WHERE id = ? AND active = 1 AND (usage_limit IS NULL OR usage_count < usage_limit)").bind(now.toISOString(), coupon.id));
-    statements.push(db.prepare("INSERT INTO coupon_redemptions (id, coupon_id, customer_id, order_id, discount_minor, redeemed_at) VALUES (?, ?, ?, ?, ?, ?)").bind(crypto.randomUUID(), coupon.id, input.customerId, orderId, discountMinor, now.toISOString()));
+    statements.push(db.prepare("UPDATE coupons SET usage_count = usage_count + 1, updated_at = ? WHERE id = ? AND active = 1 AND (usage_limit IS NULL OR usage_count < usage_limit)").bind(nowIso, coupon.id));
+    statements.push(db.prepare("INSERT INTO coupon_redemptions (id, coupon_id, customer_id, order_id, discount_minor, redeemed_at) VALUES (?, ?, ?, ?, ?, ?)").bind(crypto.randomUUID(), coupon.id, input.customerId, orderId, discountMinor, nowIso));
   }
   if (storeCreditMinor > 0) {
-    statements.push(db.prepare("UPDATE loyalty_accounts SET store_credit_minor = store_credit_minor - ?, updated_at = ? WHERE customer_id = ? AND store_credit_minor >= ?").bind(storeCreditMinor, now.toISOString(), input.customerId, storeCreditMinor));
-    statements.push(db.prepare("INSERT INTO loyalty_transactions (id, customer_id, kind, points_delta, credit_delta_minor, reference_type, reference_id, created_at) VALUES (?, ?, 'credit', 0, ?, 'order', ?, ?)").bind(crypto.randomUUID(), input.customerId, -storeCreditMinor, orderId, now.toISOString()));
+    statements.push(db.prepare("UPDATE loyalty_accounts SET store_credit_minor = store_credit_minor - ?, updated_at = ? WHERE customer_id = ? AND store_credit_minor >= ?").bind(storeCreditMinor, nowIso, input.customerId, storeCreditMinor));
+    statements.push(db.prepare("INSERT INTO loyalty_transactions (id, customer_id, kind, points_delta, credit_delta_minor, reference_type, reference_id, created_at) VALUES (?, ?, 'credit', 0, ?, 'order', ?, ?)").bind(crypto.randomUUID(), input.customerId, -storeCreditMinor, orderId, nowIso));
   }
   if (normalizedReferralCode && referralReferrer) {
     if (existingReferral?.id) {
       statements.push(db.prepare("UPDATE referrals SET referrer_customer_id = ?, code = ?, status = 'pending' WHERE id = ? AND referred_customer_id = ?").bind(referralReferrer.id, normalizedReferralCode, existingReferral.id, input.customerId));
     } else {
-      statements.push(db.prepare("INSERT INTO referrals (id, referrer_customer_id, referred_customer_id, code, status, created_at) VALUES (?, ?, ?, ?, 'pending', ?)").bind(crypto.randomUUID(), referralReferrer.id, input.customerId, normalizedReferralCode, now.toISOString()));
+      statements.push(db.prepare("INSERT INTO referrals (id, referrer_customer_id, referred_customer_id, code, status, created_at) VALUES (?, ?, ?, ?, 'pending', ?)").bind(crypto.randomUUID(), referralReferrer.id, input.customerId, normalizedReferralCode, nowIso));
     }
   }
 
   const results = await db.batch(statements);
-  const couponUpdateIndex = coupon ? statements.findIndex((statement) => statement === undefined) : -1;
-  void couponUpdateIndex;
-  const failed = results.find((result) => !result.success);
-  if (failed) throw new Error("checkout_submission_failed");
+  if (results.some((result) => !result.success)) throw new Error("checkout_submission_failed");
   return { orderId, orderNumber, workflowState: "REVIEW", subtotalMinor, deliveryFeeMinor: checkout.delivery_fee_amount, discountMinor, storeCreditMinor, totalMinor, currency: checkout.delivery_fee_currency.toUpperCase(), paymentMethod };
 }
