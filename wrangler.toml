@@ -5,11 +5,23 @@ compatibility_date = "2026-08-29"
 [vars]
 APP_ENV = "local"
 
+[[r2_buckets]]
+binding = "OBJECTS"
+bucket_name = "prime-receipts"
+
 # Resource IDs/names are environment-specific and must be supplied in staging/production.
 # Secrets are never committed here.
 
 [env.staging]
 name = "prime-core-service-staging"
 
+[[env.staging.r2_buckets]]
+binding = "OBJECTS"
+bucket_name = "prime-receipts-staging"
+
 [env.production]
 name = "prime-core-service-production"
+
+[[env.production.r2_buckets]]
+binding = "OBJECTS"
+bucket_name = "prime-receipts-production"
