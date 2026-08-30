@@ -21,7 +21,6 @@ export interface Env {
   JOBS?: Queue;
   ADMIN_ACCESS_CODE_VERIFIER?: string;
   TELEGRAM_BOT_TOKEN?: string;
-  TELEGRAM_BOT_ID?: string;
   GEOAPIFY_API_KEY?: string;
 }
 
@@ -241,8 +240,8 @@ export default {
     if (url.pathname.startsWith("/admin/catalog/")) return handleAdminCatalog(request, env);
     if (url.pathname.startsWith("/admin/loyalty/")) return handleAdminLoyalty(request, env);
     if (url.pathname === "/customer/auth/exchange") {
-      if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_BOT_ID) return jsonError("telegram_auth_not_configured", 503);
-      return handleTelegramCustomerExchange(request, { DB: env.DB, TELEGRAM_BOT_TOKEN: env.TELEGRAM_BOT_TOKEN, TELEGRAM_BOT_ID: env.TELEGRAM_BOT_ID });
+      if (!env.TELEGRAM_BOT_TOKEN) return jsonError("telegram_auth_not_configured", 503);
+      return handleTelegramCustomerExchange(request, { DB: env.DB, TELEGRAM_BOT_TOKEN: env.TELEGRAM_BOT_TOKEN });
     }
     if (url.pathname === "/customer/catalog/products" && request.method === "GET") return handleCustomerCatalog(request, env.DB);
     if (url.pathname === "/customer/delivery/couriers" && request.method === "GET") return handleCustomerCouriers(request, env.DB);
