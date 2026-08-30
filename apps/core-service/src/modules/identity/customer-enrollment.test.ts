@@ -11,7 +11,7 @@ function fakeDb(rows: Array<Record<string, unknown>> = [], botId = "bot-1") {
         bind(...values: unknown[]) {
           return {
             async first<T>() {
-              if (query.startsWith("SELECT id FROM telegram_bots")) return { id: botId } as T;
+              if (query.startsWith("SELECT id FROM telegram_bots")) return botId ? ({ id: botId } as T) : null;
               if (query.startsWith("SELECT id, prime_member_id")) return (rows[0] as T | undefined) ?? null;
               return null;
             },
@@ -53,16 +53,7 @@ describe("customer enrollment", () => {
 
   it("fails when no active Telegram bot is configured", async () => {
     const db = fakeDb([], "");
-    const enrollmentDb = {
-      calls: db.calls,
-      prepare(query: string) {
-        const prepared = db.prepare(query);
-        return {
-          bind: prepared.bind,
-        };
-      },
-    };
-    await expect(enrollCustomer(enrollmentDb, {
+    await expect(enrollCustomer(db, {
       telegramUserId: "123456789012345678",
       firstName: "Ada",
       source: "mini_app_exchange",
