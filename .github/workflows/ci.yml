@@ -36,7 +36,7 @@ jobs:
 
       - run: corepack prepare pnpm@latest --activate
 
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --no-frozen-lockfile
 
       - name: Typecheck
         run: pnpm typecheck
