@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { OrderWorkflowState } from "./order-workflow";
 import { settlePayment } from "./order-payment-settlement";
 
 class FakeStatement {
@@ -16,21 +17,13 @@ class FakeStatement {
 
   async first<T = unknown>(): Promise<T | null> {
     const sql = this.sql;
-    if (sql.startsWith("SELECT id, customer_id, workflow_state")) {
-      return this.db.order as T;
-    }
-    if (sql.startsWith("SELECT points_per_minor")) {
-      return this.db.loyaltyConfiguration as T;
-    }
-    if (sql.startsWith("SELECT points_balance, lifetime_points")) {
-      return (this.db.loyaltyAccount ? { ...this.db.loyaltyAccount } : null) as T;
-    }
+    if (sql.startsWith("SELECT id, customer_id, workflow_state")) return this.db.order as T;
+    if (sql.startsWith("SELECT points_per_minor")) return this.db.loyaltyConfiguration as T;
+    if (sql.startsWith("SELECT points_balance, lifetime_points")) return (this.db.loyaltyAccount ? { ...this.db.loyaltyAccount } : null) as T;
     if (sql.startsWith("SELECT id FROM loyalty_transactions") && sql.includes("reference_type = 'order_payment'")) {
       return this.db.earnedOrderIds.has(this.db.order.id) ? ({ id: "earned-order" } as T) : null;
     }
-    if (sql.startsWith("SELECT id, referrer_customer_id, referred_customer_id")) {
-      return (this.db.referral ? { ...this.db.referral } : null) as T;
-    }
+    if (sql.startsWith("SELECT id, referrer_customer_id, referred_customer_id")) return (this.db.referral ? { ...this.db.referral } : null) as T;
     return null;
   }
 
@@ -40,16 +33,26 @@ class FakeStatement {
 }
 
 class FakeD1Db {
-  order = {
+  order: {
+    id: string;
+    customer_id: string;
+    workflow_state: OrderWorkflowState;
+    subtotal_minor: number;
+    delivery_fee_minor: number;
+    discount_minor: number;
+    store_credit_minor: number;
+    currency: string;
+  } = {
     id: "order-1",
     customer_id: "customer-2",
-    workflow_state: "REVIEW" as const,
+    workflow_state: "REVIEW",
     subtotal_minor: 1000,
     delivery_fee_minor: 100,
     discount_minor: 100,
     store_credit_minor: 0,
     currency: "PHP",
   };
+
   loyaltyConfiguration = {
     points_per_minor: 1,
     tier_silver_threshold: 500,
@@ -60,17 +63,24 @@ class FakeD1Db {
     referrer_points: 100,
     referred_points: 50,
   };
+
   loyaltyAccount = {
     points_balance: 400,
     lifetime_points: 400,
     store_credit_minor: 0,
     tier: "member" as const,
   };
-  referral = {
+
+  referral: {
+    id: string;
+    referrer_customer_id: string;
+    referred_customer_id: string;
+  } | null = {
     id: "referral-1",
     referrer_customer_id: "customer-1",
     referred_customer_id: "customer-2",
   };
+
   earnedOrderIds = new Set<string>();
   referralRewardKeys = new Set<string>();
   appliedReferralRewards = 0;
@@ -92,7 +102,7 @@ class FakeD1Db {
           changes = 0;
         }
       } else if (sql.startsWith("INSERT INTO order_workflow_events")) {
-        changes = changes;
+        // Keep the preceding changes() value unchanged for the fake D1 batch.
       } else if (sql.startsWith("INSERT OR IGNORE INTO loyalty_transactions") && sql.includes("'earn'")) {
         if (changes === 1) {
           this.earnedOrderIds.add(this.order.id);
@@ -101,13 +111,12 @@ class FakeD1Db {
         } else {
           changes = 0;
         }
-      } else if (sql.startsWith("INSERT INTO loyalty_accounts")) {
+      } else if (sql.startsWith("INSERT INTO loyalty_accounts") && !sql.includes("SELECT")) {
         if (changes === 1) {
           this.loyaltyAccount.points_balance += Number(statement.values[1] ?? 0);
           this.loyaltyAccount.lifetime_points += Number(statement.values[2] ?? 0);
         }
       } else if (sql.startsWith("UPDATE referrals SET status = 'rewarded'")) {
-        this.referral = this.referral ? { ...this.referral } : null;
         if (this.referral) changes = 1;
       } else if (sql.startsWith("INSERT OR IGNORE INTO loyalty_transactions") && sql.includes("'referral'")) {
         if (changes === 1) {
@@ -117,8 +126,6 @@ class FakeD1Db {
             this.appliedReferralRewards += Number(statement.values[2] ?? 0);
           }
         }
-      } else if (sql.startsWith("INSERT INTO loyalty_accounts") && sql.includes("SELECT")) {
-        changes = 1;
       }
       return { success: true };
     });
@@ -126,7 +133,7 @@ class FakeD1Db {
 }
 
 describe("payment settlement integration", () => {
-  it("clears the order, awards loyalty, and records referral rewards exactly once", async () => {
+  it("clears the order, awards loyalty, and is idempotent", async () => {
     const db = new FakeD1Db();
 
     const first = await settlePayment(db, { orderId: "order-1", actorId: "admin-session-1", now: new Date("2026-08-30T15:00:00Z") });
