@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { enrollCustomer } from "./customer-enrollment";
 
-function fakeDb(rows: Array<Record<string, unknown>> = []) {
+function fakeDb(rows: Array<Record<string, unknown>> = [], botId = "bot-1") {
   const calls: string[] = [];
   return {
     calls,
@@ -11,6 +11,7 @@ function fakeDb(rows: Array<Record<string, unknown>> = []) {
         bind(...values: unknown[]) {
           return {
             async first<T>() {
+              if (query.startsWith("SELECT id FROM telegram_bots")) return { id: botId } as T;
               if (query.startsWith("SELECT id, prime_member_id")) return (rows[0] as T | undefined) ?? null;
               return null;
             },
@@ -23,17 +24,17 @@ function fakeDb(rows: Array<Record<string, unknown>> = []) {
 }
 
 describe("customer enrollment", () => {
-  it("creates an enrolled customer once", async () => {
+  it("creates an enrolled customer once using the active bot", async () => {
     const db = fakeDb();
     const result = await enrollCustomer(db, {
       telegramUserId: "123456789012345678",
       firstName: "Ada",
-      botId: "bot-1",
       source: "mini_app_exchange",
     }, () => "ABCD123456");
 
     expect(result.created).toBe(true);
     expect(result.primeMemberId).toBe("ABCD123456");
+    expect(db.calls.some((call) => call.startsWith("SELECT id FROM telegram_bots"))).toBe(true);
     expect(db.calls.some((call) => call.startsWith("INSERT INTO customers"))).toBe(true);
   });
 
@@ -42,7 +43,6 @@ describe("customer enrollment", () => {
     const result = await enrollCustomer(db, {
       telegramUserId: "123456789012345678",
       firstName: "Ada",
-      botId: "bot-1",
       source: "mini_app_exchange",
     }, () => "SHOULDNOTUSE");
 
