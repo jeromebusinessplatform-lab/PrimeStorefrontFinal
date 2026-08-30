@@ -9,7 +9,8 @@ import { submitCheckout } from "./modules/checkout/checkout-submit";
 import { createProduct, listProducts, type ProductBadge } from "./modules/catalog/catalog-store";
 import { getLoyaltyConfiguration, updateLoyaltyConfiguration, type LoyaltyConfiguration } from "./modules/loyalty/loyalty-config-store";
 import { handleCustomerCatalog, handleCustomerCouriers } from "./modules/storefront/storefront-routes";
-import { uploadReceiptToR2 } from "./modules/integrations/receipt-upload";
+import { uploadReceiptToR2, uploadReceiptToTelegram } from "./modules/integrations/receipt-upload";
+import { handleAdminPaymentSettlement } from "./modules/admin/admin-payment-settlement";
 
 export interface Env {
   APP_ENV: string;
@@ -22,6 +23,7 @@ export interface Env {
   JOBS?: Queue;
   ADMIN_ACCESS_CODE_VERIFIER?: string;
   TELEGRAM_BOT_TOKEN?: string;
+  TELEGRAM_RECEIPT_CHAT_ID?: string;
   GEOAPIFY_API_KEY?: string;
   TAGGUN_API_KEY?: string;
 }
@@ -189,13 +191,7 @@ async function handleCustomerCheckout(request: Request, env: Env): Promise<Respo
     const latitude = body.latitude;
     const longitude = body.longitude;
     if (!isString(checkoutSessionId) || !isString(courierId) || !isFiniteNumber(latitude) || !isFiniteNumber(longitude)) return jsonError("invalid_delivery_quote", 400);
-    return Response.json(await applyCheckoutDeliveryQuote(env.DB, {
-      checkoutSessionId,
-      customerId: session.customer_id,
-      courierId,
-      latitude,
-      longitude,
-    }, env.GEOAPIFY_API_KEY), { headers: { "cache-control": "private, no-store" } });
+    return Response.json(await applyCheckoutDeliveryQuote(env.DB, { checkoutSessionId, customerId: session.customer_id, courierId, latitude, longitude }, env.GEOAPIFY_API_KEY), { headers: { "cache-control": "private, no-store" } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "checkout_delivery_quote_failed";
     if (message === "checkout_forbidden") return jsonError(message, 403);
@@ -212,7 +208,6 @@ async function handleCustomerReceiptUpload(request: Request, env: Env): Promise<
   if (!env.DB) return jsonError("database_unavailable", 503);
   const session = await validateCustomerSession(env.DB, request);
   if (!session) return jsonError("telegram_session_required", 401);
-  if (!env.OBJECTS) return jsonError("r2_not_configured", 503);
   if (!(request.headers.get("content-type") ?? "").toLowerCase().includes("multipart/form-data")) return jsonError("multipart_required", 415);
   try {
     const form = await request.formData();
@@ -220,12 +215,15 @@ async function handleCustomerReceiptUpload(request: Request, env: Env): Promise<
     const file = form.get("file");
     if (typeof checkoutSessionId !== "string" || !checkoutSessionId.trim()) return jsonError("checkout_session_required", 400);
     if (!(file instanceof File)) return jsonError("receipt_file_required", 400);
-    const result = await uploadReceiptToR2(env.DB, env.OBJECTS, { checkoutSessionId, customerId: session.customer_id, file }, env.TAGGUN_API_KEY);
+    const result = env.OBJECTS
+      ? await uploadReceiptToR2(env.DB, env.OBJECTS, { checkoutSessionId, customerId: session.customer_id, file }, env.TAGGUN_API_KEY)
+      : await uploadReceiptToTelegram(env.DB, { botToken: env.TELEGRAM_BOT_TOKEN ?? "", chatId: env.TELEGRAM_RECEIPT_CHAT_ID ?? "" }, { checkoutSessionId, customerId: session.customer_id, file }, env.TAGGUN_API_KEY);
     return Response.json({ ok: true, receiptId: result.receiptId, objectKey: result.objectKey, taggun: result.taggun }, { status: 201, headers: { "cache-control": "private, no-store" } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "receipt_upload_failed";
     if (["checkout_session_required", "customer_required", "receipt_file_required", "receipt_file_too_large", "receipt_file_type_invalid"].includes(message)) return jsonError(message, 400);
     if (message === "checkout_not_found") return jsonError(message, 404);
+    if (message === "telegram_receipt_storage_not_configured") return jsonError(message, 503);
     return jsonError(message, 500);
   }
 }
@@ -239,13 +237,7 @@ async function handleCustomerCheckoutSubmit(request: Request, env: Env): Promise
     if (!isString(body.checkoutSessionId)) return jsonError("checkout_session_required", 400);
     const redeemStoreCreditMinor = body.redeemStoreCreditMinor;
     if (redeemStoreCreditMinor !== undefined && !isNonNegativeSafeInt(redeemStoreCreditMinor)) return jsonError("store_credit_invalid", 400);
-    const result = await submitCheckout(env.DB, {
-      checkoutSessionId: body.checkoutSessionId,
-      customerId: session.customer_id,
-      couponCode: isString(body.couponCode) ? body.couponCode : undefined,
-      referralCode: isString(body.referralCode) ? body.referralCode : undefined,
-      redeemStoreCreditMinor: redeemStoreCreditMinor as number | undefined,
-    });
+    const result = await submitCheckout(env.DB, { checkoutSessionId: body.checkoutSessionId, customerId: session.customer_id, couponCode: isString(body.couponCode) ? body.couponCode : undefined, referralCode: isString(body.referralCode) ? body.referralCode : undefined, redeemStoreCreditMinor: redeemStoreCreditMinor as number | undefined });
     return Response.json({ ok: true, ...result }, { status: 201, headers: { "cache-control": "private, no-store" } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "checkout_submission_failed";
@@ -263,6 +255,7 @@ export default {
     if (url.pathname.startsWith("/admin/delivery/")) return handleAdminDelivery(request, env);
     if (url.pathname.startsWith("/admin/catalog/")) return handleAdminCatalog(request, env);
     if (url.pathname.startsWith("/admin/loyalty/")) return handleAdminLoyalty(request, env);
+    if (url.pathname.startsWith("/admin/orders/") && url.pathname.endsWith("/payment-confirm")) return handleAdminPaymentSettlement(request, env);
     if (url.pathname === "/customer/auth/exchange") {
       if (!env.TELEGRAM_BOT_TOKEN) return jsonError("telegram_auth_not_configured", 503);
       return handleTelegramCustomerExchange(request, { DB: env.DB, TELEGRAM_BOT_TOKEN: env.TELEGRAM_BOT_TOKEN });
