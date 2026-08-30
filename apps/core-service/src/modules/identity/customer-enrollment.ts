@@ -58,6 +58,6 @@ export async function enrollCustomer(
   ).bind(customerId, bot.id, input.telegramUserId, primeMemberId, input.firstName.trim(), input.lastName ?? null, input.username ?? null, now, now).run();
   await db.prepare(
     "INSERT INTO customer_enrollment_events (id, customer_id, event_type, source, occurred_at, request_id) VALUES (?, ?, 'enrolled', ?, ?, ?)",
-  ).bind(crypto.randomUUID(), customerId, input.source, now, requestId ?? null).run();
+  ).bind(crypto.randomUUID(), customerId, input.source, now, input.requestId ?? null).run();
   return { customerId, primeMemberId, created: true };
 }
