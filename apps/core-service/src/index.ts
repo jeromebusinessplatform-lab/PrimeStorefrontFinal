@@ -135,7 +135,7 @@ async function handleCustomerCheckout(request: Request, env: Env): Promise<Respo
     if (message === "checkout_forbidden") return jsonError(message, 403);
     if (["checkout_session_required", "customer_required", "invalid_delivery_quote", "invalid_customer_latitude", "invalid_customer_longitude"].includes(message)) return jsonError(message, 400);
     if (message === "checkout_not_found") return jsonError(message, 404);
-    if (["default_warehouse_not_configured", "warehouse_inactive"].includes(message)) return jsonError(message, 409);
+    if (["default_warehouse_not_configured", "warehouse_inactive", "delivery_quote_expired"].includes(message)) return jsonError(message, 409);
     if (message === "courier_not_found") return jsonError(message, 404);
     if (["geoapify_api_key_required", "geoapify_route_failed", "geoapify_route_invalid"].includes(message)) return jsonError(message, 502);
     return jsonError(message, 500);
@@ -148,10 +148,11 @@ async function handleCustomerCheckoutSubmit(request: Request, env: Env): Promise
   if (!session) return jsonError("telegram_session_required", 401);
   try {
     const body = await parseJson(request);
+    if (!isString(body.checkoutSessionId)) return jsonError("checkout_session_required", 400);
     const redeemStoreCreditMinor = body.redeemStoreCreditMinor;
     if (redeemStoreCreditMinor !== undefined && !isNonNegativeSafeInt(redeemStoreCreditMinor)) return jsonError("store_credit_invalid", 400);
     const result = await submitCheckout(env.DB, {
-      checkoutSessionId: body.checkoutSessionId as string,
+      checkoutSessionId: body.checkoutSessionId,
       customerId: session.customer_id,
       couponCode: isString(body.couponCode) ? body.couponCode : undefined,
       referralCode: isString(body.referralCode) ? body.referralCode : undefined,
