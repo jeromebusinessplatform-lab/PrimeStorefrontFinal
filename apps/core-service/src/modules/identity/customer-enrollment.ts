@@ -28,7 +28,7 @@ export async function enrollCustomer(
 
   const bot = await db.prepare(
     "SELECT id FROM telegram_bots WHERE active = 1 ORDER BY created_at ASC LIMIT 1",
-  ).first<{ id: string }>();
+  ).bind().first<{ id: string }>();
   if (!bot) throw new Error("telegram_bot_not_configured");
 
   const existing = await db.prepare(
@@ -58,6 +58,6 @@ export async function enrollCustomer(
   ).bind(customerId, bot.id, input.telegramUserId, primeMemberId, input.firstName.trim(), input.lastName ?? null, input.username ?? null, now, now).run();
   await db.prepare(
     "INSERT INTO customer_enrollment_events (id, customer_id, event_type, source, occurred_at, request_id) VALUES (?, ?, 'enrolled', ?, ?, ?)",
-  ).bind(crypto.randomUUID(), customerId, input.source, now, input.requestId ?? null).run();
+  ).bind(crypto.randomUUID(), customerId, input.source, now, requestId ?? null).run();
   return { customerId, primeMemberId, created: true };
 }
