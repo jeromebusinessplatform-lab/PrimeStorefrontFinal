@@ -9,6 +9,9 @@ export const CHECKOUT_STEPS = [
 
 export type CheckoutStep = (typeof CHECKOUT_STEPS)[number];
 
+export const CHECKOUT_PAYMENT_METHODS = ["PAY_NOW", "PAY_UPON_DELIVERY"] as const;
+export type CheckoutPaymentMethod = (typeof CHECKOUT_PAYMENT_METHODS)[number];
+
 export interface ReceiverDetails {
   name: string;
   contactNumber: string;
@@ -22,7 +25,7 @@ export interface DeliverySelection {
   provider: string;
   feeAmount: number;
   feeCurrency: string;
-  paymentMethod: string;
+  paymentMethod: CheckoutPaymentMethod;
 }
 
 export interface ReceiptAnalysisOutcome {
@@ -45,8 +48,8 @@ export function assertReceiverDetails(details: ReceiverDetails): ReceiverDetails
 
 export function assertDeliverySelection(selection: DeliverySelection): DeliverySelection {
   if (!selection.provider.trim()) throw new Error("delivery_provider_required");
-  if (!Number.isInteger(selection.feeAmount) || selection.feeAmount < 0) throw new Error("delivery_fee_invalid");
+  if (!Number.isSafeInteger(selection.feeAmount) || selection.feeAmount < 0) throw new Error("delivery_fee_invalid");
   if (!selection.feeCurrency.trim()) throw new Error("delivery_fee_currency_required");
-  if (!selection.paymentMethod.trim()) throw new Error("delivery_fee_payment_method_required");
-  return Object.freeze({ ...selection, provider: selection.provider.trim(), feeCurrency: selection.feeCurrency.trim(), paymentMethod: selection.paymentMethod.trim() });
+  if (!CHECKOUT_PAYMENT_METHODS.includes(selection.paymentMethod)) throw new Error("delivery_fee_payment_method_invalid");
+  return Object.freeze({ ...selection, provider: selection.provider.trim(), feeCurrency: selection.feeCurrency.trim().toUpperCase(), paymentMethod: selection.paymentMethod });
 }
