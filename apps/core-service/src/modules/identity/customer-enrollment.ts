@@ -3,7 +3,6 @@ export interface EnrollmentInput {
   readonly firstName: string;
   readonly lastName?: string;
   readonly username?: string;
-  readonly botId: string;
   readonly source: "mini_app_exchange" | "bot_update";
   readonly requestId?: string;
 }
@@ -27,9 +26,14 @@ export async function enrollCustomer(
   if (!/^\d+$/.test(input.telegramUserId)) throw new Error("invalid_telegram_user_id");
   if (!input.firstName.trim()) throw new Error("first_name_required");
 
+  const bot = await db.prepare(
+    "SELECT id FROM telegram_bots WHERE active = 1 ORDER BY created_at ASC LIMIT 1",
+  ).first<{ id: string }>();
+  if (!bot) throw new Error("telegram_bot_not_configured");
+
   const existing = await db.prepare(
     "SELECT id, prime_member_id, telegram_first_name, telegram_last_name, telegram_username FROM customers WHERE bot_id = ? AND telegram_user_id = ? LIMIT 1",
-  ).bind(input.botId, input.telegramUserId).first<{
+  ).bind(bot.id, input.telegramUserId).first<{
     id: string;
     prime_member_id: string;
     telegram_first_name: string;
@@ -51,7 +55,7 @@ export async function enrollCustomer(
   const primeMemberId = generateId();
   await db.prepare(
     "INSERT INTO customers (id, bot_id, telegram_user_id, prime_member_id, telegram_first_name, telegram_last_name, telegram_username, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)",
-  ).bind(customerId, input.botId, input.telegramUserId, primeMemberId, input.firstName.trim(), input.lastName ?? null, input.username ?? null, now, now).run();
+  ).bind(customerId, bot.id, input.telegramUserId, primeMemberId, input.firstName.trim(), input.lastName ?? null, input.username ?? null, now, now).run();
   await db.prepare(
     "INSERT INTO customer_enrollment_events (id, customer_id, event_type, source, occurred_at, request_id) VALUES (?, ?, 'enrolled', ?, ?, ?)",
   ).bind(crypto.randomUUID(), customerId, input.source, now, input.requestId ?? null).run();
