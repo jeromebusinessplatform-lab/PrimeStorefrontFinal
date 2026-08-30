@@ -1,6 +1,7 @@
 interface D1PreparedStatementLike {
   bind(...values: unknown[]): D1PreparedStatementLike;
   first<T = unknown>(): Promise<T | null>;
+  run(): Promise<{ success: boolean; meta?: { changes?: number } }>;
 }
 interface D1Like { prepare(sql: string): D1PreparedStatementLike; }
 
@@ -36,7 +37,7 @@ export async function getLoyaltyConfiguration(db: D1Like): Promise<LoyaltyConfig
       points_per_credit_minor, referral_minimum_order_minor, referrer_points, referred_points
     FROM loyalty_configuration WHERE id = 1 LIMIT 1`).first<Record<string, number>>();
   if (!row) throw new Error("loyalty_configuration_missing");
-  return {
+  const config: LoyaltyConfiguration = {
     pointsPerMinor: Number(row.points_per_minor),
     tierThresholds: { member: 0, silver: Number(row.tier_silver_threshold), gold: Number(row.tier_gold_threshold), platinum: Number(row.tier_platinum_threshold) },
     pointsPerCreditMinor: Number(row.points_per_credit_minor),
@@ -44,11 +45,14 @@ export async function getLoyaltyConfiguration(db: D1Like): Promise<LoyaltyConfig
     referrerPoints: Number(row.referrer_points),
     referredPoints: Number(row.referred_points),
   };
+  assertConfiguration(config);
+  return config;
 }
 
 export async function updateLoyaltyConfiguration(db: D1Like, config: LoyaltyConfiguration, now = new Date()): Promise<LoyaltyConfiguration> {
   assertConfiguration(config);
-  await db.prepare(`UPDATE loyalty_configuration SET points_per_minor = ?, tier_silver_threshold = ?, tier_gold_threshold = ?, tier_platinum_threshold = ?, points_per_credit_minor = ?, referral_minimum_order_minor = ?, referrer_points = ?, referred_points = ?, updated_at = ? WHERE id = 1`)
-    .bind(config.pointsPerMinor, config.tierThresholds.silver, config.tierThresholds.gold, config.tierThresholds.platinum, config.pointsPerCreditMinor, config.referralMinimumOrderMinor, config.referrerPoints, config.referredPoints, now.toISOString()).first();
+  const result = await db.prepare(`UPDATE loyalty_configuration SET points_per_minor = ?, tier_silver_threshold = ?, tier_gold_threshold = ?, tier_platinum_threshold = ?, points_per_credit_minor = ?, referral_minimum_order_minor = ?, referrer_points = ?, referred_points = ?, updated_at = ? WHERE id = 1`)
+    .bind(config.pointsPerMinor, config.tierThresholds.silver, config.tierThresholds.gold, config.tierThresholds.platinum, config.pointsPerCreditMinor, config.referralMinimumOrderMinor, config.referrerPoints, config.referredPoints, now.toISOString()).run();
+  if (!result.success || result.meta?.changes !== 1) throw new Error("loyalty_configuration_update_failed");
   return config;
 }
