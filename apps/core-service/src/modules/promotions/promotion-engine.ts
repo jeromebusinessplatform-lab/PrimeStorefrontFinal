@@ -45,16 +45,17 @@ export function calculateCoupon(rule: CouponRule, context: PromotionContext): Co
   assertSafeMinor(context.subtotalMinor, "subtotal");
   if (!rule.active) throw new InvalidCoupon("coupon_inactive");
   const code = normalizeCouponCode(rule.code);
-  if (rule.usageLimit !== undefined && rule.usageCount >= rule.usageLimit) throw new InvalidCoupon("coupon_usage_limit_reached");
+  if (rule.usageLimit !== undefined && (!Number.isSafeInteger(rule.usageLimit) || rule.usageLimit < 0 || rule.usageCount >= rule.usageLimit)) throw new InvalidCoupon("coupon_usage_limit_reached");
   if (context.subtotalMinor < (rule.minSubtotalMinor ?? 0)) throw new InvalidCoupon("coupon_minimum_not_met");
   const now = context.now ?? new Date();
   if (rule.startsAt && now < new Date(rule.startsAt)) throw new InvalidCoupon("coupon_not_started");
   if (rule.endsAt && now > new Date(rule.endsAt)) throw new InvalidCoupon("coupon_expired");
   assertSafeMinor(rule.discountValue, "discount_value");
+  if (rule.discountType === "percent" && rule.discountValue > 100) throw new InvalidCoupon("coupon_percent_invalid");
+  if (rule.maxDiscountMinor !== undefined) assertSafeMinor(rule.maxDiscountMinor, "max_discount");
   let discountMinor = rule.discountType === "fixed"
     ? Math.min(rule.discountValue, context.subtotalMinor)
     : Math.floor(context.subtotalMinor * rule.discountValue / 100);
-  if (rule.discountType === "percent" && (rule.discountValue > 100)) throw new InvalidCoupon("coupon_percent_invalid");
   if (rule.maxDiscountMinor !== undefined) discountMinor = Math.min(discountMinor, rule.maxDiscountMinor);
   discountMinor = Math.min(discountMinor, context.subtotalMinor);
   return Object.freeze({ code, discountMinor, totalMinor: context.subtotalMinor - discountMinor });
@@ -65,5 +66,6 @@ export function composeDiscounts(subtotalMinor: number, coupon?: CouponResult, s
   assertSafeMinor(storeCreditMinor, "store_credit");
   const couponDiscount = coupon?.discountMinor ?? 0;
   if (!Number.isSafeInteger(couponDiscount) || couponDiscount < 0) throw new InvalidCoupon("coupon_discount_invalid");
-  return Math.max(0, subtotalMinor - Math.min(subtotalMinor, couponDiscount) - Math.min(subtotalMinor - Math.min(subtotalMinor, couponDiscount), storeCreditMinor));
+  const afterCoupon = subtotalMinor - Math.min(subtotalMinor, couponDiscount);
+  return afterCoupon - Math.min(afterCoupon, storeCreditMinor);
 }
