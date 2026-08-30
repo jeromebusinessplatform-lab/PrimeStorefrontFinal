@@ -100,7 +100,7 @@ export async function uploadReceiptToTelegram(
     const downloadResponse = await fetchImpl(`https://api.telegram.org/file/bot${input.botToken}/${fileInfo.file_path}`);
     if (downloadResponse.ok) {
       const blob = await downloadResponse.blob();
-      taggun = await analyzeReceiptWithTaggun(blob, input.taggunApiKey ?? "");
+      taggun = await analyzeReceiptWithTaggun(blob, input.taggunApiKey ?? "", fetchImpl);
     }
   } catch {
     taggun = { status: "failed" };
