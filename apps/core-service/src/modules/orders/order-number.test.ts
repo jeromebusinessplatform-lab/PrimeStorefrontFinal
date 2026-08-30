@@ -9,8 +9,8 @@ describe("order number", () => {
   });
 
   it("handles the Manila date boundary", () => {
-    expect(generateOrderNumber(new Date("2026-08-30T15:59:59.000Z"))).toBe("310826075959");
-    expect(generateOrderNumber(new Date("2026-08-30T16:00:00.000Z"))).toBe("310826080000");
+    expect(generateOrderNumber(new Date("2026-08-30T15:59:59.000Z"))).toBe("300826235959");
+    expect(generateOrderNumber(new Date("2026-08-30T16:00:00.000Z"))).toBe("310826000000");
   });
 
   it("rejects malformed order numbers", () => {
