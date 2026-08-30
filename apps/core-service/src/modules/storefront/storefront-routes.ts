@@ -1,7 +1,6 @@
 import { validateCustomerSession } from "../identity/customer-session";
 import { listProducts } from "../catalog/catalog-store";
 import { listCouriers } from "../delivery/delivery-config-store";
-import { autocompleteAddress } from "../integrations/geoapify-autocomplete";
 
 function errorResponse(error: string, status: number): Response {
   return Response.json({ error }, { status, headers: { "cache-control": "private, no-store" } });
@@ -13,18 +12,6 @@ export async function handleCustomerCatalog(request: Request, db: D1Database): P
   if (!session) return errorResponse("telegram_session_required", 401);
   const url = new URL(request.url);
   if (url.searchParams.get("view") === "orders") return listCustomerOrders(db, session.customer_id);
-  if (url.searchParams.get("view") === "autocomplete") {
-    const query = (url.searchParams.get("q") ?? "").trim();
-    const apiKey = url.searchParams.get("apiKey") ?? "";
-    if (query.length < 3) return Response.json({ suggestions: [] }, { headers: { "cache-control": "private, no-store" } });
-    if (!apiKey) return errorResponse("geoapify_not_configured", 503);
-    try {
-      const suggestions = await autocompleteAddress(query, apiKey, { countryCode: "ph", limit: 8 });
-      return Response.json({ suggestions }, { headers: { "cache-control": "private, no-store" } });
-    } catch {
-      return errorResponse("address_autocomplete_failed", 502);
-    }
-  }
   try {
     return Response.json({ products: await listProducts(db) }, { headers: { "cache-control": "private, no-store" } });
   } catch {
