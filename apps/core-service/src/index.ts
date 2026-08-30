@@ -6,6 +6,8 @@ import { createDeliveryQuote, applyCheckoutDeliveryQuote } from "./modules/deliv
 import { createCourier, createWarehouse, deactivateCourier, deactivateWarehouse, listCouriers, listWarehouses, setDefaultWarehouse, updateCourier, updateWarehouse } from "./modules/delivery/delivery-config-store";
 import type { CourierType } from "./modules/delivery/delivery-config";
 import { submitCheckout } from "./modules/checkout/checkout-submit";
+import { createProduct, listProducts, type ProductBadge } from "./modules/catalog/catalog-store";
+import { getLoyaltyConfiguration, updateLoyaltyConfiguration, type LoyaltyConfiguration } from "./modules/loyalty/loyalty-config-store";
 
 export interface Env {
   APP_ENV: string;
@@ -111,6 +113,68 @@ async function handleAdminDelivery(request: Request, env: Env): Promise<Response
   return jsonError("not_found", 404);
 }
 
+async function handleAdminCatalog(request: Request, env: Env): Promise<Response> {
+  if (!env.DB) return jsonError("database_unavailable", 503);
+  if (!(await requireAdmin(env, request))) return jsonError("admin_auth_required", 401);
+  const path = new URL(request.url).pathname.replace(/^\/admin\/catalog\/?/, "");
+  try {
+    if (path === "products" && request.method === "GET") return Response.json({ products: await listProducts(env.DB) }, { headers: { "cache-control": "no-store" } });
+    if (path === "products" && request.method === "POST") {
+      const body = await parseJson(request);
+      if (!isString(body.name) || !isNonNegativeSafeInt(body.priceMinor) || !isNonNegativeSafeInt(body.costMinor) || !isNonNegativeSafeInt(body.stocksAvailable) || !isNonNegativeSafeInt(body.lowStockThreshold)) return jsonError("invalid_product", 400);
+      const badge = body.badge === undefined || body.badge === null ? null : body.badge as ProductBadge;
+      const result = await createProduct(env.DB, {
+        name: body.name,
+        subname: body.subname === undefined || body.subname === null ? null : isString(body.subname) ? body.subname : undefined,
+        categoryId: body.categoryId === undefined || body.categoryId === null ? null : isString(body.categoryId) ? body.categoryId : undefined,
+        description: body.description === undefined || body.description === null ? null : isString(body.description) ? body.description : undefined,
+        priceMinor: body.priceMinor,
+        costMinor: body.costMinor,
+        compareAtPriceMinor: body.compareAtPriceMinor === undefined || body.compareAtPriceMinor === null ? null : body.compareAtPriceMinor as number,
+        stocksAvailable: body.stocksAvailable,
+        lowStockThreshold: body.lowStockThreshold,
+        sku: isString(body.sku) ? body.sku : undefined,
+        barcode: body.barcode === undefined || body.barcode === null ? null : isString(body.barcode) ? body.barcode : undefined,
+        taxInclusive: body.taxInclusive !== false,
+        imageObjectKey: body.imageObjectKey === undefined || body.imageObjectKey === null ? null : isString(body.imageObjectKey) ? body.imageObjectKey : undefined,
+        badge,
+      });
+      return Response.json({ ok: true, ...result }, { status: 201, headers: { "cache-control": "no-store" } });
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "catalog_operation_failed";
+    if (["json_required", "invalid_json", "invalid_product", "product_name_required", "product_name_invalid", "price_invalid", "cost_invalid", "stock_invalid", "low_stock_threshold_invalid", "compare_at_price_invalid", "badge_invalid"].includes(message)) return jsonError(message, 400);
+    return jsonError(message, 409);
+  }
+  return jsonError("not_found", 404);
+}
+
+async function handleAdminLoyalty(request: Request, env: Env): Promise<Response> {
+  if (!env.DB) return jsonError("database_unavailable", 503);
+  if (!(await requireAdmin(env, request))) return jsonError("admin_auth_required", 401);
+  const path = new URL(request.url).pathname.replace(/^\/admin\/loyalty\/?/, "");
+  try {
+    if (path === "configuration" && request.method === "GET") return Response.json(await getLoyaltyConfiguration(env.DB), { headers: { "cache-control": "no-store" } });
+    if (path === "configuration" && request.method === "PATCH") {
+      const body = await parseJson(request);
+      const config: LoyaltyConfiguration = {
+        pointsPerMinor: body.pointsPerMinor as number,
+        tierThresholds: { member: 0, silver: (body.tierThresholds as Record<string, unknown> | undefined)?.silver as number, gold: (body.tierThresholds as Record<string, unknown> | undefined)?.gold as number, platinum: (body.tierThresholds as Record<string, unknown> | undefined)?.platinum as number },
+        pointsPerCreditMinor: body.pointsPerCreditMinor as number,
+        referralMinimumOrderMinor: body.referralMinimumOrderMinor as number,
+        referrerPoints: body.referrerPoints as number,
+        referredPoints: body.referredPoints as number,
+      };
+      return Response.json(await updateLoyaltyConfiguration(env.DB, config), { headers: { "cache-control": "no-store" } });
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "loyalty_configuration_failed";
+    if (["json_required", "invalid_json", "points_per_minor_invalid", "points_per_credit_minor_invalid", "member_threshold_invalid", "silver_threshold_invalid", "gold_threshold_invalid", "platinum_threshold_invalid", "tier_threshold_order_invalid", "referral_minimum_order_minor_invalid", "referrer_points_invalid", "referred_points_invalid", "loyalty_configuration_update_failed"].includes(message)) return jsonError(message, 400);
+    return jsonError(message, 409);
+  }
+  return jsonError("not_found", 404);
+}
+
 async function handleCustomerCheckout(request: Request, env: Env): Promise<Response> {
   if (!env.DB) return jsonError("database_unavailable", 503);
   const session = await validateCustomerSession(env.DB, request);
@@ -173,6 +237,8 @@ export default {
     if (url.pathname === "/health") return Response.json({ ok: true, service: "prime-core-service", env: env.APP_ENV });
     if (!env.DB) return jsonError("database_unavailable", 503);
     if (url.pathname.startsWith("/admin/delivery/")) return handleAdminDelivery(request, env);
+    if (url.pathname.startsWith("/admin/catalog/")) return handleAdminCatalog(request, env);
+    if (url.pathname.startsWith("/admin/loyalty/")) return handleAdminLoyalty(request, env);
     if (url.pathname === "/customer/auth/exchange") {
       if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_BOT_ID) return jsonError("telegram_auth_not_configured", 503);
       return handleTelegramCustomerExchange(request, { DB: env.DB, TELEGRAM_BOT_TOKEN: env.TELEGRAM_BOT_TOKEN, TELEGRAM_BOT_ID: env.TELEGRAM_BOT_ID });
