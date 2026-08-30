@@ -49,6 +49,6 @@ describe("Telegram receipt storage", () => {
     expect(result.objectKey).toBe("telegram://receipts/telegram-file-123");
     expect(result.receiptId).toBeTruthy();
     expect(result.taggun.status).toBe("failed");
-    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
   });
 });
