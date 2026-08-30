@@ -4,33 +4,64 @@ on:
   push:
     branches:
       - main
-      - feat/sprint-2-delivery-engine
+      - "feat/**"
   pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+env:
+  CI: true
 
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.15.0
-          run_install: false
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+          cache: pnpm
+
+      - run: corepack enable
+
+      - run: corepack prepare pnpm@latest --activate
+
+      - run: pnpm install --frozen-lockfile
+
       - name: Typecheck
-        run: pnpm run typecheck
-      - name: Test
-        run: pnpm run test
+        run: pnpm typecheck
+
+      - name: Tests
+        run: pnpm test
+
       - name: Build
-        run: pnpm run build
+        run: pnpm build
+
+  diagnostics:
+    if: ${{ failure() }}
+    needs: validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - run: |
+          echo "RUN_ID=${GITHUB_RUN_ID}"
+          echo "ATTEMPT=${GITHUB_RUN_ATTEMPT}"
+          echo "SHA=${GITHUB_SHA}"
+          echo "REF=${GITHUB_REF}"
+
+      - run: |
+          node --version
+          npm --version
+          pnpm --version || true
+          git --version

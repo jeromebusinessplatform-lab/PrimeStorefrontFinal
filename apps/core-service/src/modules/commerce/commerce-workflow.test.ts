@@ -7,7 +7,6 @@ import { normalizeTrackingUrl } from "../tracking/tracking";
 describe("Sprint 3 commerce workflow", () => {
   it("builds a server-authoritative quote from delivery, coupon, and store credit", () => {
     const quote = buildCommerceQuote({
-      state: "REVIEW",
       subtotalMinor: 10000,
       deliveryFeeMinor: 250,
       currency: "php",
