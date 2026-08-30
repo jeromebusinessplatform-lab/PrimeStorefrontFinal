@@ -1,16 +1,6 @@
 import { settlePayment } from "../orders/order-payment-settlement";
 import { validateAdminSession } from "../security/admin-session";
 
-interface D1Db {
-  prepare(sql: string): {
-    bind(...values: unknown[]): {
-      first<T = unknown>(): Promise<T | null>;
-      run(): Promise<unknown>;
-    };
-  };
-  batch(statements: unknown[]): Promise<unknown[]>;
-}
-
 interface PaymentSettlementEnv {
   DB?: D1Database;
 }
