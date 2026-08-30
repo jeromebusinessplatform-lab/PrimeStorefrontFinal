@@ -59,13 +59,13 @@ async function requireReceiptBeforeSubmission(request: Request, env: Env): Promi
 }
 
 export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     if (url.pathname === "/customer/catalog/receipt" && request.method === "POST") return handleTemporaryTelegramReceipt(request, env);
     if (url.pathname === "/customer/checkout/submit" && request.method === "POST") {
       const receiptError = await requireReceiptBeforeSubmission(request, env);
       if (receiptError) return receiptError;
     }
-    return coreWorker.fetch(request, env, ctx);
+    return coreWorker.fetch(request, env);
   },
 };
