@@ -8,6 +8,7 @@ import type { CourierType } from "./modules/delivery/delivery-config";
 import { submitCheckout } from "./modules/checkout/checkout-submit";
 import { createProduct, listProducts, type ProductBadge } from "./modules/catalog/catalog-store";
 import { getLoyaltyConfiguration, updateLoyaltyConfiguration, type LoyaltyConfiguration } from "./modules/loyalty/loyalty-config-store";
+import { handleCustomerCatalog, handleCustomerCouriers } from "./modules/storefront/storefront-routes";
 
 export interface Env {
   APP_ENV: string;
@@ -243,6 +244,8 @@ export default {
       if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_BOT_ID) return jsonError("telegram_auth_not_configured", 503);
       return handleTelegramCustomerExchange(request, { DB: env.DB, TELEGRAM_BOT_TOKEN: env.TELEGRAM_BOT_TOKEN, TELEGRAM_BOT_ID: env.TELEGRAM_BOT_ID });
     }
+    if (url.pathname === "/customer/catalog/products" && request.method === "GET") return handleCustomerCatalog(request, env.DB);
+    if (url.pathname === "/customer/delivery/couriers" && request.method === "GET") return handleCustomerCouriers(request, env.DB);
     if (url.pathname === "/customer/checkout/delivery-quote" && request.method === "POST") return handleCustomerCheckout(request, env);
     if (url.pathname === "/customer/checkout/submit" && request.method === "POST") return handleCustomerCheckoutSubmit(request, env);
     if (url.pathname === "/admin/auth/login") {
