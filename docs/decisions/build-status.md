@@ -1,7 +1,11 @@
 # Build Status
 
 ## Current phase
+<<<<<<< HEAD
 Sprint 4 — Payments, proof upload, receipt analysis, and review boundary in implementation
+=======
+Sprint 3 — commerce workflow implementation in progress; integration/E2E and CI closeout remain
+>>>>>>> origin/feat/sprint-3-commerce-workflow
 
 ## Authoritative architecture
 - Single PRIME deployment; no tenant model.
@@ -39,6 +43,7 @@ Sprint 4 — Payments, proof upload, receipt analysis, and review boundary in im
 - CI workflow fixed for repositories without a committed pnpm lockfile and for the current workspace TypeScript/React/Cloudflare typings.
 - Workflow coverage enforces HTTPS tracking links during dispatch.
 
+<<<<<<< HEAD
 ## Sprint 4 implementation in this branch
 - Versioned payment-method configuration for Static QR Ph and one card-gateway adapter.
 - Payment intent records bound to a server-rebuilt checkout/cart quote snapshot and selected cart lines.
@@ -68,3 +73,30 @@ Implementation slice is committed on a dedicated Sprint 4 branch and is awaiting
 4. Loyalty modules (points, tiers, badges, store credit).
 5. Full POS/fulfillment/customer/support/fraud/reporting phases.
 6. Production Cloudflare configuration, secrets, domain bindings, and end-to-end live validation.
+=======
+## Sprint 3 implementation in progress
+- Commerce workflow composition now reuses the existing order transition contract and server-authoritative tracking requirement.
+- Coupon engine supports fixed/percentage discounts, minimum subtotal, usage limits, validity windows, maximum discounts, normalization, and integer minor-unit arithmetic.
+- Referral engine supports code normalization, self-referral rejection, qualification thresholds, and qualification-to-reward state progression.
+- Loyalty engine supports points earning/redemption, lifetime points, tier thresholds, and store-credit conversion with safe integer validation.
+- Sprint 3 persistence migration 0011_promotions_referrals_loyalty.sql adds coupons, redemptions, referrals, loyalty accounts, and loyalty transactions.
+- Focused Sprint 3 tests cover checkout quote composition, tracking dispatch enforcement, coupons, referral qualification/reward, and loyalty accrual/tiering.
+
+## Validation
+- GitHub direct write path: verified.
+- Sprint 2 feature branch: feat/sprint-2-delivery-engine.
+- Full CI for Sprint 2 completed successfully on the feature branch: dependency installation, TypeScript typecheck, all tests, and build passed.
+- Sprint 3 branch: feat/sprint-3-commerce-workflow.
+- Sprint 3 CI/typecheck/test/build validation is pending on the current branch and is required before closeout.
+- Live Geoapify/Taggun calls: not performed from this repository write session.
+- Production Cloudflare mutations: not performed.
+
+## Sprint 3 closeout gate
+Sprint 3 is **not complete yet**. Remaining gate: wire the new promotion/referral/loyalty capabilities into persisted checkout/order paths, add integration/E2E coverage across the full workflow, run full CI, remediate regressions, and then record the verified Sprint 3 closeout.
+
+## Remaining launch backlog
+1. Complete Sprint 3 HTTP routes/UI integration for commerce workflow and customer checkout/tracking.
+2. Persist and apply coupon/referral/loyalty effects in checkout/order transactions.
+3. Integration/E2E validation and full CI closeout.
+4. Production Cloudflare configuration, secrets, domain bindings, and end-to-end live validation.
+>>>>>>> origin/feat/sprint-3-commerce-workflow
