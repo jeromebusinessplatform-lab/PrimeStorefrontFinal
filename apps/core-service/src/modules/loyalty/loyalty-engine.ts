@@ -25,17 +25,22 @@ function nonNegativeSafe(value: number): boolean { return Number.isSafeInteger(v
 
 export function pointsEarned(orderTotalMinor: number, policy: LoyaltyPolicy): number {
   if (!nonNegativeSafe(orderTotalMinor) || !Number.isSafeInteger(policy.pointsPerMinor) || policy.pointsPerMinor < 0) throw new InvalidLoyaltyOperation("loyalty_policy_invalid");
-  return orderTotalMinor * policy.pointsPerMinor;
+  const earned = orderTotalMinor * policy.pointsPerMinor;
+  if (!Number.isSafeInteger(earned)) throw new InvalidLoyaltyOperation("points_overflow");
+  return earned;
 }
 
 export function tierForLifetimePoints(points: number, thresholds: Record<LoyaltyTier, number>): LoyaltyTier {
   if (!nonNegativeSafe(points)) throw new InvalidLoyaltyOperation("points_invalid");
-  for (const tier of [...LOYALTY_TIERS].reverse()) if (points >= thresholds[tier]) return tier;
+  for (const tier of [...LOYALTY_TIERS].reverse()) {
+    if (!nonNegativeSafe(thresholds[tier])) throw new InvalidLoyaltyOperation("tier_threshold_invalid");
+    if (points >= thresholds[tier]) return tier;
+  }
   return "member";
 }
 
 export function earnPoints(account: LoyaltyAccount, points: number, policy: LoyaltyPolicy): LoyaltyAccount {
-  if (!nonNegativeSafe(points)) throw new InvalidLoyaltyOperation("points_invalid");
+  if (!nonNegativeSafe(points) || !nonNegativeSafe(account.pointsBalance) || !nonNegativeSafe(account.lifetimePoints)) throw new InvalidLoyaltyOperation("points_invalid");
   const lifetimePoints = account.lifetimePoints + points;
   const balance = account.pointsBalance + points;
   if (!nonNegativeSafe(lifetimePoints) || !nonNegativeSafe(balance)) throw new InvalidLoyaltyOperation("points_overflow");
@@ -43,7 +48,7 @@ export function earnPoints(account: LoyaltyAccount, points: number, policy: Loya
 }
 
 export function redeemPoints(account: LoyaltyAccount, points: number): LoyaltyAccount {
-  if (!nonNegativeSafe(points) || points > account.pointsBalance) throw new InvalidLoyaltyOperation("insufficient_points");
+  if (!nonNegativeSafe(points) || !nonNegativeSafe(account.pointsBalance) || points > account.pointsBalance) throw new InvalidLoyaltyOperation("insufficient_points");
   return Object.freeze({ ...account, pointsBalance: account.pointsBalance - points });
 }
 
