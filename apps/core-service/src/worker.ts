@@ -6,6 +6,12 @@ function errorResponse(error: string, status: number): Response {
   return Response.json({ error }, { status, headers: { "cache-control": "no-store" } });
 }
 
+async function resolveActiveCheckout(db: D1Database, customerId: string): Promise<string> {
+  const row = await db.prepare("SELECT id FROM checkout_sessions WHERE customer_id = ? AND status != 'submitted' AND status != 'expired' ORDER BY updated_at DESC LIMIT 1").bind(customerId).first<{ id: string }>();
+  if (!row) throw new Error("checkout_not_found");
+  return row.id;
+}
+
 async function handleTemporaryTelegramReceipt(request: Request, env: Env): Promise<Response> {
   if (!env.DB) return errorResponse("database_unavailable", 503);
   const session = await validateCustomerSession(env.DB, request);
@@ -14,9 +20,9 @@ async function handleTemporaryTelegramReceipt(request: Request, env: Env): Promi
   if (!(request.headers.get("content-type") ?? "").toLowerCase().includes("multipart/form-data")) return errorResponse("multipart_required", 415);
   try {
     const form = await request.formData();
-    const checkoutSessionId = form.get("checkoutSessionId");
+    const suppliedCheckoutSessionId = form.get("checkoutSessionId");
+    const checkoutSessionId = typeof suppliedCheckoutSessionId === "string" && suppliedCheckoutSessionId.trim() ? suppliedCheckoutSessionId : await resolveActiveCheckout(env.DB, session.customer_id);
     const file = form.get("file");
-    if (typeof checkoutSessionId !== "string" || !checkoutSessionId.trim()) return errorResponse("checkout_session_required", 400);
     if (!(file instanceof File)) return errorResponse("receipt_file_required", 400);
     const result = await uploadReceiptToTelegram(env.DB, {
       checkoutSessionId,
