@@ -14,3 +14,6 @@ name = "prime-core-service-staging"
 
 [env.production]
 name = "prime-core-service-production"
+
+[env.production.vars]
+APP_ENV = "production"
