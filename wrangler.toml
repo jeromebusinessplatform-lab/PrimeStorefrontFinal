@@ -15,5 +15,10 @@ name = "prime-core-service-staging"
 [env.production]
 name = "prime-core-service-production"
 
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "prime-commerce-production"
+database_id = "c2b102ec-a3cd-4de3-89ff-5d97003d2aad"
+
 [env.production.vars]
 APP_ENV = "production"
