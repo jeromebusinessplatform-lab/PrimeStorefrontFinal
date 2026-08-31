@@ -53,39 +53,11 @@ jobs:
       - name: Verify Cloudflare credentials
         run: pnpm dlx wrangler@latest whoami
 
-      - name: Resolve production D1 and prepare deployment config
-        shell: bash
-        run: |
-          set -euo pipefail
-          pnpm dlx wrangler@latest d1 list --json > /tmp/d1-list.json
-          node <<'NODE'
-          const fs = require('fs');
-          const raw = fs.readFileSync('/tmp/d1-list.json', 'utf8');
-          const databases = JSON.parse(raw);
-          const candidates = databases.filter((db) => {
-            const name = String(db.name ?? '').toLowerCase();
-            return /prime/.test(name) && /(prod|production)/.test(name);
-          });
-          const selected = candidates.length === 1 ? candidates[0] : null;
-          if (!selected) {
-            const summary = databases.map((db) => `${db.name} (${db.uuid ?? db.database_id ?? 'no-id'})`).join('\n');
-            if (candidates.length > 1) throw new Error(`Multiple Prime production D1 databases found; refusing to guess:\n${candidates.map((db) => db.name).join('\n')}`);
-            throw new Error(`No uniquely identifiable Prime production D1 database found. Available D1 databases:\n${summary || '(none)'}`);
-          }
-          const id = selected.uuid ?? selected.database_id;
-          if (!id) throw new Error(`Selected D1 database ${selected.name} has no database ID.`);
-          const base = fs.readFileSync('wrangler.toml', 'utf8');
-          const block = `\n\n[[env.production.d1_databases]]\nbinding = "DB"\ndatabase_name = "${selected.name.replaceAll('"', '\\"')}"\ndatabase_id = "${id}"\n`;
-          fs.writeFileSync('wrangler.deploy.toml', base + block);
-          fs.writeFileSync('/tmp/selected-d1-name', selected.name);
-          console.log(`Selected production D1: ${selected.name}`);
-          NODE
-
       - name: Apply production D1 migrations
-        run: pnpm dlx wrangler@latest d1 migrations apply "$(cat /tmp/selected-d1-name)" --remote
+        run: pnpm dlx wrangler@latest d1 migrations apply prime-commerce-production --remote --config wrangler.toml --env production
 
       - name: Deploy production Worker
-        run: pnpm dlx wrangler@latest deploy --config wrangler.deploy.toml --env production
+        run: pnpm dlx wrangler@latest deploy --config wrangler.toml --env production
 
       - name: Print deployment endpoint
         run: |
