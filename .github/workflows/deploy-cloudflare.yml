@@ -52,10 +52,10 @@ jobs:
         run: pnpm build
 
       - name: Verify Cloudflare credentials
-        run: pnpm exec wrangler whoami
+        run: pnpm dlx wrangler@latest whoami
 
       - name: Deploy production Worker
-        run: pnpm exec wrangler deploy --env production
+        run: pnpm dlx wrangler@latest deploy --env production
 
       - name: Print deployment endpoint
         run: |
