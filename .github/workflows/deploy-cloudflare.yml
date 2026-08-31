@@ -53,6 +53,9 @@ jobs:
       - name: Verify Cloudflare credentials
         run: pnpm dlx wrangler@latest whoami
 
+      - name: Reconcile production D1 migration drift
+        run: node scripts/repair-production-d1-migration.mjs
+
       - name: Apply production D1 migrations
         run: pnpm dlx wrangler@latest d1 migrations apply prime-commerce-production --remote --config wrangler.toml --env production
 
