@@ -1,7 +1,7 @@
 name = "prime-core-service"
 main = "apps/core-service/src/worker.ts"
 compatibility_date = "2026-08-29"
-workers_dev = false
+workers_dev = true
 
 [vars]
 APP_ENV = "local"
