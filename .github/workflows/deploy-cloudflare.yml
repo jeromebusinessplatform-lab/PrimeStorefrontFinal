@@ -1,0 +1,64 @@
+name: Deploy Cloudflare Worker
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: cloudflare-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Validate and deploy production Worker
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: true
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Activate pnpm
+        run: corepack prepare pnpm@10.15.0 --activate
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Tests
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Verify Cloudflare credentials
+        run: pnpm exec wrangler whoami
+
+      - name: Deploy production Worker
+        run: pnpm exec wrangler deploy --env production
+
+      - name: Print deployment endpoint
+        run: |
+          echo "Cloudflare production deployment completed."
+          echo "Worker: prime-core-service-production"
+          echo "workers.dev is enabled by wrangler.toml."
