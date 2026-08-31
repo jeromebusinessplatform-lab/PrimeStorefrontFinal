@@ -34,7 +34,12 @@ function run(sql) {
 }
 
 function rows(result) {
-  return (result?.results ?? []).flatMap((item) => item?.results ?? []);
+  const value = result?.results;
+  if (!Array.isArray(value)) return [];
+  if (value.every((item) => item && Array.isArray(item.results))) {
+    return value.flatMap((item) => item.results);
+  }
+  return value;
 }
 
 // Ensure the standard Wrangler migration ledger exists before inspecting it.
