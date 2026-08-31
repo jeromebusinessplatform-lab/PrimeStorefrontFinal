@@ -1,12 +1,13 @@
 name = "prime-core-service"
 main = "apps/core-service/src/worker.ts"
 compatibility_date = "2026-08-29"
+workers_dev = false
 
 [vars]
 APP_ENV = "local"
 
 # R2 is intentionally optional for the temporary Telegram receipt-storage launch mode.
-# Re-add the OBJECTS R2 bindings once the account bucket is provisioned.
+# Re-add the OBJECTS R2 binding once the account bucket is provisioned.
 
 [env.staging]
 name = "prime-core-service-staging"
