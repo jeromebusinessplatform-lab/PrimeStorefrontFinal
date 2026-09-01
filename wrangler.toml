@@ -13,7 +13,9 @@ APP_ENV = "local"
 name = "prime-core-service-staging"
 
 [env.production]
-name = "prime-core-service-production"
+# Production Worker name intentionally matches the public workers.dev endpoint:
+# https://primestorefrontfinal.codespacelabs.workers.dev/
+name = "primestorefrontfinal"
 
 [[env.production.d1_databases]]
 binding = "DB"
