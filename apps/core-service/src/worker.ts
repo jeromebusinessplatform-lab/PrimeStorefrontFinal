@@ -61,6 +61,22 @@ async function requireReceiptBeforeSubmission(request: Request, env: Env): Promi
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    const assets = (env as Env & { ASSETS?: Fetcher }).ASSETS;
+
+    // The Worker is also the API origin, while Workers Static Assets serves the
+    // two browser applications from the same deployment. /admin/* is configured
+    // as Worker-first so the API and admin shell can coexist on one hostname.
+    if (assets && (request.method === "GET" || request.method === "HEAD")) {
+      if (url.pathname === "/admin" || url.pathname === "/admin/") {
+        const assetUrl = new URL(url);
+        assetUrl.pathname = "/admin/index.html";
+        return assets.fetch(new Request(assetUrl, request));
+      }
+      if (url.pathname.startsWith("/admin/assets/") || url.pathname === "/admin/favicon.ico") {
+        return assets.fetch(request);
+      }
+    }
+
     if (url.pathname === "/customer/catalog/receipt" && request.method === "POST") return handleTemporaryTelegramReceipt(request, env);
     if (url.pathname === "/customer/checkout/submit" && request.method === "POST") {
       const receiptError = await requireReceiptBeforeSubmission(request, env);
