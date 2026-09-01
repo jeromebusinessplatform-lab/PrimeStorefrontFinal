@@ -20,7 +20,7 @@ name = "primestorefrontfinal"
 [[env.production.d1_databases]]
 binding = "DB"
 database_name = "prime-commerce-production"
-database_id = "c2b102ec-a3cd-4de3-89ff-5d97003d2aad"
+database_id = "a7887058-e3ac-4a2c-ad22-eddc9e1ba4bb"
 
 [env.production.vars]
 APP_ENV = "production"
