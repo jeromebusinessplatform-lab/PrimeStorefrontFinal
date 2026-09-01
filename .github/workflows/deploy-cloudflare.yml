@@ -53,14 +53,36 @@ jobs:
       - name: Verify Cloudflare credentials
         run: pnpm dlx wrangler@latest whoami
 
-      # IMPORTANT: production D1 must be migrated from the canonical migration
-      # history. Do not run a schema-repair script before this step: on a newly
-      # recreated database the base tables do not exist yet.
+      # Production D1 is always migrated from the canonical ordered migration
+      # history. No ad-hoc schema repair runs before this step.
       - name: Apply production D1 migrations
         run: pnpm dlx wrangler@latest d1 migrations apply prime-commerce-production --remote --config wrangler.toml --env production
 
       - name: Deploy production Worker
         run: pnpm dlx wrangler@latest deploy --config wrangler.toml --env production
+
+      # /health does not require D1 by design. This endpoint verifies that the
+      # DB binding is actually present by reaching a DB-backed customer route.
+      # 401 is expected without a customer session; 503 means DB binding is absent.
+      - name: Verify production D1 binding
+        run: |
+          set -euo pipefail
+          URL="https://primestorefrontfinal.codespacelabs.workers.dev/customer/catalog/products"
+          for attempt in 1 2 3 4 5; do
+            STATUS="$(curl --silent --show-error --max-time 15 -o /tmp/prime-response.json -w '%{http_code}' "$URL")"
+            echo "D1 binding smoke-test HTTP status: $STATUS"
+            if [ "$STATUS" = "401" ] || [ "$STATUS" = "200" ]; then
+              cat /tmp/prime-response.json
+              echo
+              exit 0
+            fi
+            cat /tmp/prime-response.json || true
+            echo
+            echo "D1 binding/schema smoke test failed; waiting 5s..."
+            sleep 5
+          done
+          echo "Production D1 binding smoke test failed."
+          exit 1
 
       - name: Verify deployed Worker health
         run: |
