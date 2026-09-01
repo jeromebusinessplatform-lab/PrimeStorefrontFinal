@@ -61,9 +61,8 @@ jobs:
       - name: Deploy production Worker
         run: pnpm dlx wrangler@latest deploy --config wrangler.toml --env production
 
-      # /health does not require D1 by design. This endpoint verifies that the
-      # DB binding is actually present by reaching a DB-backed customer route.
-      # 401 is expected without a customer session; 503 means DB binding is absent.
+      # The API smoke test proves the Worker/D1 path is alive. 401 is expected
+      # because no Telegram customer session is supplied by CI.
       - name: Verify production D1 binding
         run: |
           set -euo pipefail
@@ -99,9 +98,29 @@ jobs:
           echo "Production Worker health check failed: $URL"
           exit 1
 
+      # Verify both browser shells explicitly. /admin must reach the Admin SPA,
+      # while the root must reach the storefront shell. We inspect the HTML title
+      # so a generic Cloudflare 404 or wrong shell cannot pass this gate.
+      - name: Verify browser shells
+        run: |
+          set -euo pipefail
+          check_shell() {
+            local URL="$1"
+            local EXPECTED="$2"
+            local BODY
+            BODY="$(curl --silent --show-error --fail --max-time 15 "$URL")"
+            echo "Checked $URL"
+            grep -Fq "$EXPECTED" <<< "$BODY"
+          }
+          check_shell "https://primestorefrontfinal.codespacelabs.workers.dev/" "PRIME"
+          check_shell "https://primestorefrontfinal.codespacelabs.workers.dev/admin/" "PRIME"
+          echo "Storefront and Admin browser shells verified."
+
       - name: Print deployment endpoint
         run: |
           echo "Cloudflare production deployment completed."
-          echo "Worker: prime-core-service-production"
+          echo "Worker: primestorefrontfinal"
+          echo "Storefront: https://primestorefrontfinal.codespacelabs.workers.dev/"
+          echo "Admin: https://primestorefrontfinal.codespacelabs.workers.dev/admin/"
           echo "Health: https://primestorefrontfinal.codespacelabs.workers.dev/health"
           echo "workers.dev is enabled by wrangler.toml."
