@@ -53,17 +53,33 @@ jobs:
       - name: Verify Cloudflare credentials
         run: pnpm dlx wrangler@latest whoami
 
-      - name: Reconcile production D1 migration drift
-        run: node scripts/repair-production-d1-migration.mjs
-
+      # IMPORTANT: production D1 must be migrated from the canonical migration
+      # history. Do not run a schema-repair script before this step: on a newly
+      # recreated database the base tables do not exist yet.
       - name: Apply production D1 migrations
         run: pnpm dlx wrangler@latest d1 migrations apply prime-commerce-production --remote --config wrangler.toml --env production
 
       - name: Deploy production Worker
         run: pnpm dlx wrangler@latest deploy --config wrangler.toml --env production
 
+      - name: Verify deployed Worker health
+        run: |
+          set -euo pipefail
+          URL="https://primestorefrontfinal.codespacelabs.workers.dev/health"
+          for attempt in 1 2 3 4 5; do
+            if curl --fail --silent --show-error --max-time 15 "$URL"; then
+              echo
+              exit 0
+            fi
+            echo "Health check attempt $attempt failed; waiting 5s..."
+            sleep 5
+          done
+          echo "Production Worker health check failed: $URL"
+          exit 1
+
       - name: Print deployment endpoint
         run: |
           echo "Cloudflare production deployment completed."
           echo "Worker: prime-core-service-production"
+          echo "Health: https://primestorefrontfinal.codespacelabs.workers.dev/health"
           echo "workers.dev is enabled by wrangler.toml."
