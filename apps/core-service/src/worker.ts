@@ -58,19 +58,45 @@ async function requireReceiptBeforeSubmission(request: Request, env: Env): Promi
   return null;
 }
 
+const ADMIN_API_PREFIXES = [
+  "/admin/auth/",
+  "/admin/delivery/",
+  "/admin/catalog/",
+  "/admin/loyalty/",
+  "/admin/orders/",
+];
+
+function isAdminApiPath(pathname: string): boolean {
+  return ADMIN_API_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+}
+
+function isStaticAssetPath(pathname: string): boolean {
+  return /\.[^/]+$/.test(pathname);
+}
+
+async function fetchBrowserAsset(assets: Fetcher, request: Request): Promise<Response> {
+  const url = new URL(request.url);
+  const assetUrl = new URL(url);
+
+  if (url.pathname === "/admin" || url.pathname === "/admin/") {
+    assetUrl.pathname = "/admin/index.html";
+  } else if (url.pathname.startsWith("/admin/") && !isStaticAssetPath(url.pathname)) {
+    assetUrl.pathname = "/admin/index.html";
+  } else if (url.pathname !== "/" && !isStaticAssetPath(url.pathname)) {
+    assetUrl.pathname = "/index.html";
+  }
+
+  return assets.fetch(new Request(assetUrl, request));
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     const assets = (env as Env & { ASSETS?: Fetcher }).ASSETS;
 
-    // The Worker is also the API origin, while Workers Static Assets serves the
-    // two browser applications from the same deployment. /admin/* is configured
-    // as Worker-first so the API and admin shell can coexist on one hostname.
     if (assets && (request.method === "GET" || request.method === "HEAD")) {
-      if (url.pathname === "/admin" || url.pathname === "/admin/") {
-        const assetUrl = new URL(url);
-        assetUrl.pathname = "/admin/index.html";
-        return assets.fetch(new Request(assetUrl, request));
+      if (!isAdminApiPath(url.pathname) && !url.pathname.startsWith("/customer/")) {
+        return fetchBrowserAsset(assets, request);
       }
       if (url.pathname.startsWith("/admin/assets/") || url.pathname === "/admin/favicon.ico") {
         return assets.fetch(request);
