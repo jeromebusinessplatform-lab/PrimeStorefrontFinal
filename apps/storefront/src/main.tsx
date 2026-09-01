@@ -1,4 +1,4 @@
-import React, { FormEvent, useEffect, useMemo, useState } from "react";
+import React, { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 
@@ -111,10 +111,11 @@ function Checkout({ items, couriers, onComplete }: { items: Array<{ product: Pro
 
 function App() {
   const [authenticated, setAuthenticated] = useState(false); const [products, setProducts] = useState<Product[]>([]); const [couriers, setCouriers] = useState<Courier[]>([]); const [orders, setOrders] = useState<CustomerOrder[]>([]); const [submittedOrder, setSubmittedOrder] = useState<{ orderId: string; orderNumber: string } | null>(null); const [cart, setCart] = useState<Record<string, number>>({}); const [loading, setLoading] = useState(true);
+  const handleAuthenticated = useCallback(() => setAuthenticated(true), []);
   async function reloadOrders() { try { setOrders(await listOrders()); } catch { setOrders([]); } }
   useEffect(() => { if (!authenticated) return; void Promise.all([listProducts(), listCouriers(), listOrders()]).then(([nextProducts, nextCouriers, nextOrders]) => { setProducts(nextProducts); setCouriers(nextCouriers); setOrders(nextOrders); }).catch(() => { setProducts([]); setCouriers([]); setOrders([]); }).finally(() => setLoading(false)); }, [authenticated]);
   const cartItems = products.filter((p) => cart[p.id] > 0).map((product) => ({ product, quantity: cart[product.id] }));
-  if (!authenticated) return <TelegramGate onAuthenticated={() => setAuthenticated(true)} />;
+  if (!authenticated) return <TelegramGate onAuthenticated={handleAuthenticated} />;
   return <main className="shell"><header className="topbar"><div><div className="eyebrow">PRIME™ SHOPFRONT</div><h1>Shop</h1></div><span className="status">Telegram Verified</span></header>{submittedOrder ? <section className="panel success-card"><div className="eyebrow">ORDER CONFIRMED</div><h2>{submittedOrder.orderNumber}</h2><p className="muted">Your order has been submitted for review.</p><button type="button" className="primary" onClick={() => { setSubmittedOrder(null); setCart({}); void reloadOrders(); }}>View Orders</button></section> : null}<section className="stack"><div className="section-heading"><div><div className="eyebrow">CATALOG</div><h2>Products</h2></div><span className="muted">Cart {cartItems.reduce((sum, item) => sum + item.quantity, 0)}</span></div>{loading ? <p className="muted">Loading products…</p> : products.length ? products.map((product) => <ProductCard key={product.id} product={product} onAdd={(next) => setCart((current) => ({ ...current, [next.id]: (current[next.id] ?? 0) + 1 }))} />) : <p className="muted">No products available.</p>}{cartItems.length ? <Checkout items={cartItems} couriers={couriers} onComplete={(order) => { setSubmittedOrder(order); void reloadOrders(); }} /> : null}<OrderHistory orders={orders} /></section></main>;
 }
 
