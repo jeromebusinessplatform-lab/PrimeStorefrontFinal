@@ -10,6 +10,13 @@ type AddressSuggestion = { id: string; formatted: string; latitude: number; long
 type CustomerOrder = { id: string; orderNumber: string; workflowState: string; status: string; totalMinor: number; currency: string; createdAt: string; trackingLink: string | null };
 type ApiError = { error?: string };
 type CheckoutState = { checkoutSessionId: string; items: Array<{ productId: string; quantity: number }>; receiverName: string; receiverContact: string; deliveryAddress: string; latitude: string; longitude: string; courierId: string; deliveryFeeMinor: number; deliveryQuoteId: string; deliveryPaymentMethod: "PAY_NOW" | "PAY_UPON_DELIVERY"; couponCode: string; referralCode: string; receiptObjectKey: string };
+type TelegramWebApp = { initData?: string; ready?: () => void };
+
+declare global {
+  interface Window {
+    Telegram?: { WebApp?: TelegramWebApp };
+  }
+}
 
 async function apiError(response: Response, fallback: string): Promise<Error> { const body = await response.json().catch(() => null) as ApiError | null; return new Error(body?.error ?? fallback); }
 async function getSession(): Promise<CustomerSession> { const response = await fetch("/customer/auth/session", { credentials: "include", cache: "no-store" }); return response.ok ? await response.json() as CustomerSession : { ok: false }; }
@@ -29,9 +36,44 @@ async function autocomplete(query: string): Promise<AddressSuggestion[]> {
 async function getDeliveryQuote(state: CheckoutState): Promise<DeliveryQuote> { const response = await fetch("/customer/checkout/delivery-quote", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ checkoutSessionId: state.checkoutSessionId, courierId: state.courierId, latitude: Number(state.latitude), longitude: Number(state.longitude) }) }); if (!response.ok) throw await apiError(response, "delivery_quote_failed"); return await response.json() as DeliveryQuote; }
 async function submitCheckout(state: CheckoutState): Promise<{ orderId: string; orderNumber: string }> { const response = await fetch("/customer/checkout/submit", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify(state) }); if (!response.ok) throw await apiError(response, "checkout_submission_failed"); return await response.json() as { orderId: string; orderNumber: string }; }
 
+async function waitForTelegramInitData(timeoutMs = 5000): Promise<string> {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const webApp = window.Telegram?.WebApp;
+    if (webApp) {
+      webApp.ready?.();
+      const initData = webApp.initData?.trim() ?? "";
+      if (initData) return initData;
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, 50));
+  }
+  return "";
+}
+
 function TelegramGate({ onAuthenticated }: { onAuthenticated: () => void }) {
   const [busy, setBusy] = useState(true); const [message, setMessage] = useState("Checking Telegram session…");
-  useEffect(() => { void getSession().then(async (session) => { if (session.ok) { onAuthenticated(); return; } const initData = (window as Window & { Telegram?: { WebApp?: { initData?: string } } }).Telegram?.WebApp?.initData ?? ""; if (!initData) { setMessage("Open PRIME from Telegram to continue."); return; } const response = await fetch("/customer/auth/exchange", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ initData }) }); if (!response.ok) { setMessage("Telegram authentication failed. Reopen PRIME from Telegram."); return; } onAuthenticated(); }).catch(() => setMessage("Unable to verify Telegram access.")).finally(() => setBusy(false)); }, [onAuthenticated]);
+  useEffect(() => {
+    let cancelled = false;
+    async function authenticate() {
+      try {
+        const session = await getSession();
+        if (cancelled) return;
+        if (session.ok) { onAuthenticated(); return; }
+        const initData = await waitForTelegramInitData();
+        if (cancelled) return;
+        if (!initData) { setMessage("Open PRIME from the Telegram Mini App button to continue."); return; }
+        const response = await fetch("/customer/auth/exchange", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ initData }) });
+        if (!response.ok) { setMessage("Telegram authentication failed. Reopen PRIME from the Telegram Mini App."); return; }
+        onAuthenticated();
+      } catch {
+        if (!cancelled) setMessage("Unable to verify Telegram access.");
+      } finally {
+        if (!cancelled) setBusy(false);
+      }
+    }
+    void authenticate();
+    return () => { cancelled = true; };
+  }, [onAuthenticated]);
   return <main className="shell auth-shell"><section className="panel auth-panel"><div className="eyebrow">PRIME™ SHOPFRONT</div><h1>Telegram Only</h1><p className="muted">{busy ? "Checking Telegram session…" : message}</p></section></main>;
 }
 
