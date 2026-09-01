@@ -9,6 +9,12 @@ APP_ENV = "local"
 # R2 is intentionally optional for the temporary Telegram receipt-storage launch mode.
 # Re-add the OBJECTS R2 binding once the account bucket is provisioned.
 
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/admin/*", "/customer/*", "/health"]
+
 [env.staging]
 name = "prime-core-service-staging"
 
@@ -16,6 +22,12 @@ name = "prime-core-service-staging"
 # Production Worker name intentionally matches the public workers.dev endpoint:
 # https://primestorefrontfinal.codespacelabs.workers.dev/
 name = "primestorefrontfinal"
+
+[env.production.assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/admin/*", "/customer/*", "/health"]
 
 [[env.production.d1_databases]]
 binding = "DB"
