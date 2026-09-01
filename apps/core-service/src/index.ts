@@ -187,15 +187,68 @@ async function handleCustomerCheckout(request: Request, env: Env): Promise<Respo
   if (!env.GEOAPIFY_API_KEY) return jsonError("geoapify_not_configured", 503);
   try {
     const body = await parseJson(request);
-    // checkout implementation continues below
-    return jsonError("not_implemented", 501);
+    const checkoutSessionId = body.checkoutSessionId;
+    const courierId = body.courierId;
+    const latitude = body.latitude;
+    const longitude = body.longitude;
+    if (!isString(checkoutSessionId) || !isString(courierId) || !isFiniteNumber(latitude) || !isFiniteNumber(longitude)) return jsonError("invalid_delivery_quote", 400);
+    return Response.json(await applyCheckoutDeliveryQuote(env.DB, { checkoutSessionId, customerId: session.customer_id, courierId, latitude, longitude }, env.GEOAPIFY_API_KEY), { headers: { "cache-control": "private, no-store" } });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "checkout_failed";
-    return jsonError(message, 400);
+    const message = error instanceof Error ? error.message : "checkout_delivery_quote_failed";
+    if (message === "checkout_forbidden") return jsonError(message, 403);
+    if (["checkout_session_required", "customer_required", "invalid_delivery_quote", "invalid_customer_latitude", "invalid_customer_longitude"].includes(message)) return jsonError(message, 400);
+    if (message === "checkout_not_found") return jsonError(message, 404);
+    if (["default_warehouse_not_configured", "warehouse_inactive", "delivery_quote_expired"].includes(message)) return jsonError(message, 409);
+    if (message === "courier_not_found") return jsonError(message, 404);
+    if (["geoapify_api_key_required", "geoapify_route_failed", "geoapify_route_invalid"].includes(message)) return jsonError(message, 502);
+    return jsonError(message, 500);
   }
 }
 
-const coreWorker = {
+async function handleCustomerReceiptUpload(request: Request, env: Env): Promise<Response> {
+  if (!env.DB) return jsonError("database_unavailable", 503);
+  const session = await validateCustomerSession(env.DB, request);
+  if (!session) return jsonError("telegram_session_required", 401);
+  if (!(request.headers.get("content-type") ?? "").toLowerCase().includes("multipart/form-data")) return jsonError("multipart_required", 415);
+  try {
+    const form = await request.formData();
+    const checkoutSessionId = form.get("checkoutSessionId");
+    const file = form.get("file");
+    if (typeof checkoutSessionId !== "string" || !checkoutSessionId.trim()) return jsonError("checkout_session_required", 400);
+    if (!(file instanceof File)) return jsonError("receipt_file_required", 400);
+    const result = env.OBJECTS
+      ? await uploadReceiptToR2(env.DB, env.OBJECTS, { checkoutSessionId, customerId: session.customer_id, file }, env.TAGGUN_API_KEY)
+      : await uploadReceiptToTelegram(env.DB, { botToken: env.TELEGRAM_BOT_TOKEN ?? "", chatId: env.TELEGRAM_RECEIPT_CHAT_ID ?? "" }, { checkoutSessionId, customerId: session.customer_id, file }, env.TAGGUN_API_KEY);
+    return Response.json({ ok: true, receiptId: result.receiptId, objectKey: result.objectKey, taggun: result.taggun }, { status: 201, headers: { "cache-control": "private, no-store" } });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "receipt_upload_failed";
+    if (["checkout_session_required", "customer_required", "receipt_file_required", "receipt_file_too_large", "receipt_file_type_invalid"].includes(message)) return jsonError(message, 400);
+    if (message === "checkout_not_found") return jsonError(message, 404);
+    if (message === "telegram_receipt_storage_not_configured") return jsonError(message, 503);
+    return jsonError(message, 500);
+  }
+}
+
+async function handleCustomerCheckoutSubmit(request: Request, env: Env): Promise<Response> {
+  if (!env.DB) return jsonError("database_unavailable", 503);
+  const session = await validateCustomerSession(env.DB, request);
+  if (!session) return jsonError("telegram_session_required", 401);
+  try {
+    const body = await parseJson(request);
+    if (!isString(body.checkoutSessionId)) return jsonError("checkout_session_required", 400);
+    const redeemStoreCreditMinor = body.redeemStoreCreditMinor;
+    if (redeemStoreCreditMinor !== undefined && !isNonNegativeSafeInt(redeemStoreCreditMinor)) return jsonError("store_credit_invalid", 400);
+    const result = await submitCheckout(env.DB, { checkoutSessionId: body.checkoutSessionId, customerId: session.customer_id, couponCode: isString(body.couponCode) ? body.couponCode : undefined, referralCode: isString(body.referralCode) ? body.referralCode : undefined, redeemStoreCreditMinor: redeemStoreCreditMinor as number | undefined });
+    return Response.json({ ok: true, ...result }, { status: 201, headers: { "cache-control": "private, no-store" } });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "checkout_submission_failed";
+    if (["json_required", "invalid_json", "checkout_session_required", "customer_required", "receiver_name_required", "receiver_contact_invalid", "delivery_address_required", "delivery_selection_required", "delivery_fee_payment_method_invalid", "checkout_cart_empty", "checkout_cart_item_invalid", "checkout_subtotal_overflow", "coupon_not_found", "store_credit_invalid", "insufficient_store_credit", "referral_code_not_found", "self_referral_forbidden", "referral_already_applied", "checkout_total_invalid"].includes(message)) return jsonError(message, 400);
+    if (["checkout_not_found", "checkout_already_submitted", "checkout_expired", "delivery_quote_expired"].includes(message)) return jsonError(message, 409);
+    return jsonError(message, 500);
+  }
+}
+
+export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     if (url.pathname === "/health") return Response.json({ ok: true, service: "prime-core-service", env: env.APP_ENV });
@@ -206,21 +259,30 @@ const coreWorker = {
     if (url.pathname.startsWith("/admin/orders/") && url.pathname.endsWith("/payment-confirm")) return handleAdminPaymentSettlement(request, env);
     if (url.pathname === "/customer/auth/exchange") {
       if (!env.TELEGRAM_BOT_TOKEN) return jsonError("telegram_auth_not_configured", 503);
-      return handleTelegramCustomerExchange(request, env);
+      return handleTelegramCustomerExchange(request, { DB: env.DB, TELEGRAM_BOT_TOKEN: env.TELEGRAM_BOT_TOKEN });
     }
-    if (url.pathname === "/admin/auth/login") return handleAdminLogin(request, env);
-    if (url.pathname === "/admin/auth/session") return requireAdmin(env, request).then((ok) => ok ? Response.json({ ok: true }, { headers: { "cache-control": "no-store" } }) : jsonError("admin_auth_required", 401));
-    if (url.pathname === "/admin/auth/logout") {
-      const headers = new Headers({ "cache-control": "no-store" });
-      headers.append("set-cookie", `${ADMIN_SESSION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`);
-      return new Response(null, { status: 204, headers });
+    if (url.pathname === "/customer/catalog/products" && request.method === "GET") return handleCustomerCatalog(request, env.DB);
+    if (url.pathname === "/customer/catalog/receipt" && request.method === "POST") return handleCustomerReceiptUpload(request, env);
+    if (url.pathname === "/customer/delivery/couriers" && request.method === "GET") return handleCustomerCouriers(request, env.DB);
+    if (url.pathname === "/customer/checkout/delivery-quote" && request.method === "POST") return handleCustomerCheckout(request, env);
+    if (url.pathname === "/customer/checkout/submit" && request.method === "POST") return handleCustomerCheckoutSubmit(request, env);
+    if (url.pathname === "/admin/auth/login") {
+      if (!env.ADMIN_ACCESS_CODE_VERIFIER) return jsonError("admin_auth_not_configured", 503);
+      return handleAdminLogin(request, { DB: env.DB, ADMIN_ACCESS_CODE_VERIFIER: env.ADMIN_ACCESS_CODE_VERIFIER });
     }
-    if (url.pathname === "/customer/catalog/products" && request.method === "GET") return handleCustomerCatalog(request, env);
-    if (url.pathname === "/customer/catalog/couriers" && request.method === "GET") return handleCustomerCouriers(request, env);
-    if (url.pathname === "/customer/checkout/quote" && request.method === "POST") return handleCustomerCheckout(request, env);
-    if (url.pathname === "/customer/checkout/submit" && request.method === "POST") return submitCheckout(request, env);
+    if (url.pathname === "/admin/auth/session" && request.method === "GET") {
+      const session = await validateAdminSession(env.DB, request);
+      if (!session) return jsonError("admin_auth_required", 401);
+      return Response.json({ ok: true, sessionId: session.id }, { headers: { "cache-control": "no-store" } });
+    }
+    if (url.pathname === "/customer/auth/session" && request.method === "GET") {
+      const session = await validateCustomerSession(env.DB, request);
+      if (!session) return jsonError("telegram_session_required", 401);
+      return Response.json({ ok: true, sessionId: session.id, customerId: session.customer_id }, { headers: { "cache-control": "private, no-store" } });
+    }
+    const adminCookiePresent = request.headers.get("Cookie")?.includes(`${ADMIN_SESSION_COOKIE}=`) ?? false;
+    const customerCookiePresent = request.headers.get("Cookie")?.includes(`${CUSTOMER_SESSION_COOKIE}=`) ?? false;
+    if (adminCookiePresent || customerCookiePresent) return jsonError("route_not_implemented", 501);
     return jsonError("not_found", 404);
   },
 };
-
-export default coreWorker;
