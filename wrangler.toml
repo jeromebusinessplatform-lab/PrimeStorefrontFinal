@@ -13,7 +13,7 @@ APP_ENV = "local"
 directory = "./dist"
 binding = "ASSETS"
 not_found_handling = "404-page"
-run_worker_first = ["/admin/*", "/customer/*", "/health"]
+run_worker_first = ["/admin", "/admin/*", "/customer/*", "/health"]
 
 [env.staging]
 name = "prime-core-service-staging"
@@ -27,7 +27,7 @@ name = "primestorefrontfinal"
 directory = "./dist"
 binding = "ASSETS"
 not_found_handling = "404-page"
-run_worker_first = ["/admin/*", "/customer/*", "/health"]
+run_worker_first = ["/admin", "/admin/*", "/customer/*", "/health"]
 
 [[env.production.d1_databases]]
 binding = "DB"
