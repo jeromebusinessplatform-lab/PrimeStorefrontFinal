@@ -46,7 +46,13 @@ function appliedMigrations() {
 }
 
 function getColumns(table) {
-  return new Set(rows(run(`PRAGMA table_info('${table}')`)).map((column) => column.name));
+  // Use SQLite's pragma_table_info() table-valued function instead of a PRAGMA
+  // statement. This makes the schema introspection deterministic through the
+  // Wrangler D1 JSON query path and avoids false "missing column" results.
+  const safeTable = table.replaceAll("'", "''");
+  return new Set(
+    rows(run(`SELECT name FROM pragma_table_info('${safeTable}')`)).map((column) => column.name),
+  );
 }
 
 function ensureColumn(table, column, definition, columnNames) {
